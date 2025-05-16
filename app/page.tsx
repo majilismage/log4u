@@ -33,8 +33,14 @@ interface TravelEntry {
 export default function TravelLog() {
   const [departureDate, setDepartureDate] = useState<Date>(new Date())
   const [arrivalDate, setArrivalDate] = useState<Date>(new Date())
-  const [from, setFrom] = useState("")
-  const [to, setTo] = useState("")
+  const [fromTown, setFromTown] = useState("")
+  const [fromCountry, setFromCountry] = useState("")
+  const [fromLat, setFromLat] = useState("")
+  const [fromLng, setFromLng] = useState("")
+  const [toTown, setToTown] = useState("")
+  const [toCountry, setToCountry] = useState("")
+  const [toLat, setToLat] = useState("")
+  const [toLng, setToLng] = useState("")
   const [distance, setDistance] = useState("")
   const [avgSpeed, setAvgSpeed] = useState("")
   const [maxSpeed, setMaxSpeed] = useState("")
@@ -44,44 +50,121 @@ export default function TravelLog() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [showAllImages, setShowAllImages] = useState(false)
 
-  // Mock function to simulate saving to Google Sheets/Drive
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const newEntry: TravelEntry = {
-      id: Date.now().toString(),
-      departureDate,
-      arrivalDate,
-      from,
-      to,
-      distance: Number.parseFloat(distance),
-      avgSpeed: Number.parseFloat(avgSpeed),
-      maxSpeed: Number.parseFloat(maxSpeed),
-      notes,
-      images: [...images],
-    }
-
-    setEntries([newEntry, ...entries])
-
-    // Reset form
-    setFrom("")
-    setTo("")
-    setDistance("")
-    setAvgSpeed("")
-    setMaxSpeed("")
-    setNotes("")
-    setImages([])
-
-    // In a real app, you would send this data to Google Sheets/Drive here
-    console.log("Saving entry:", newEntry)
-  }
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newImages = Array.from(e.target.files).map((file) => URL.createObjectURL(file))
-      setImages([...images, ...newImages])
+      const uploadedFiles = Array.from(e.target.files);
+      const uploadPromises = uploadedFiles.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('journeyId', Date.now().toString());
+        formData.append('town', toTown);
+        formData.append('country', toCountry);
+        formData.append('journeyDate', arrivalDate.toISOString());
+
+        try {
+          const response = await fetch('/api/upload-media', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to upload file');
+          }
+
+          return {
+            url: result.webViewLink,
+            fileId: result.fileId,
+            name: file.name,
+          };
+        } catch (error) {
+          console.error('Error uploading file:', error);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(uploadPromises);
+      const successfulUploads = results.filter((result): result is { url: string; fileId: string; name: string } => result !== null);
+      
+      if (successfulUploads.length > 0) {
+        setImages(prev => [...prev, ...successfulUploads.map(upload => upload.url)]);
+      }
     }
-  }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const entry = {
+      departureDate: format(departureDate, "yyyy-MM-dd"),
+      arrivalDate: format(arrivalDate, "yyyy-MM-dd"),
+      fromTown,
+      fromCountry,
+      fromLat: parseFloat(fromLat),
+      fromLng: parseFloat(fromLng),
+      toTown,
+      toCountry,
+      toLat: parseFloat(toLat),
+      toLng: parseFloat(toLng),
+      distance,
+      avgSpeed,
+      maxSpeed,
+      notes,
+      mediaLinks: images.length > 0 ? JSON.stringify(images) : undefined,
+    };
+
+    try {
+      const response = await fetch('/api/save-entry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(entry),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save entry');
+      }
+
+      // Add to local state only if save was successful
+      const newEntry: TravelEntry = {
+        id: Date.now().toString(),
+        departureDate,
+        arrivalDate,
+        from: `${fromTown}, ${fromCountry}`,
+        to: `${toTown}, ${toCountry}`,
+        distance: Number.parseFloat(distance),
+        avgSpeed: Number.parseFloat(avgSpeed),
+        maxSpeed: Number.parseFloat(maxSpeed),
+        notes,
+        images: [...images],
+      };
+
+      setEntries([newEntry, ...entries]);
+
+      // Reset form
+      setFromTown("");
+      setFromCountry("");
+      setFromLat("");
+      setFromLng("");
+      setToTown("");
+      setToCountry("");
+      setToLat("");
+      setToLng("");
+      setDistance("");
+      setAvgSpeed("");
+      setMaxSpeed("");
+      setNotes("");
+      setImages([]);
+
+    } catch (error) {
+      console.error('Error saving entry:', error);
+      // Here you might want to show an error message to the user
+      // You can add a toast notification or error state to display to the user
+    }
+  };
 
   const nextImage = () => {
     setCurrentImageIndex((prevIndex) => (prevIndex === images.length - 1 ? 0 : prevIndex + 1))
@@ -177,24 +260,82 @@ export default function TravelLog() {
 
                   <div className="space-y-2">
                     <Label htmlFor="from">From</Label>
-                    <Input
-                      id="from"
-                      value={from}
-                      onChange={(e) => setFrom(e.target.value)}
-                      placeholder="Departure location"
-                      required
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        id="fromTown"
+                        value={fromTown}
+                        onChange={(e) => setFromTown(e.target.value)}
+                        placeholder="Town/City"
+                        required
+                      />
+                      <Input
+                        id="fromCountry"
+                        value={fromCountry}
+                        onChange={(e) => setFromCountry(e.target.value)}
+                        placeholder="Country"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        id="fromLat"
+                        type="number"
+                        step="any"
+                        value={fromLat}
+                        onChange={(e) => setFromLat(e.target.value)}
+                        placeholder="Latitude"
+                        required
+                      />
+                      <Input
+                        id="fromLng"
+                        type="number"
+                        step="any"
+                        value={fromLng}
+                        onChange={(e) => setFromLng(e.target.value)}
+                        placeholder="Longitude"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="to">To</Label>
-                    <Input
-                      id="to"
-                      value={to}
-                      onChange={(e) => setTo(e.target.value)}
-                      placeholder="Arrival location"
-                      required
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        id="toTown"
+                        value={toTown}
+                        onChange={(e) => setToTown(e.target.value)}
+                        placeholder="Town/City"
+                        required
+                      />
+                      <Input
+                        id="toCountry"
+                        value={toCountry}
+                        onChange={(e) => setToCountry(e.target.value)}
+                        placeholder="Country"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        id="toLat"
+                        type="number"
+                        step="any"
+                        value={toLat}
+                        onChange={(e) => setToLat(e.target.value)}
+                        placeholder="Latitude"
+                        required
+                      />
+                      <Input
+                        id="toLng"
+                        type="number"
+                        step="any"
+                        value={toLng}
+                        onChange={(e) => setToLng(e.target.value)}
+                        placeholder="Longitude"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="col-span-2 grid grid-cols-3 gap-4">
@@ -437,7 +578,7 @@ export default function TravelLog() {
               ) : (
                 <div className="flex flex-col items-center justify-center h-[300px]">
                   <p className="text-muted-foreground">No travel entries yet</p>
-                  <Button variant="link" onClick={() => document.querySelector('[data-value="form"]')?.click()}>
+                  <Button variant="link" onClick={() => (document.querySelector('[data-value="form"]') as HTMLElement)?.click()}>
                     Create your first entry
                   </Button>
                 </div>
