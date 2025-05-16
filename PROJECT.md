@@ -1,7 +1,6 @@
 # Travel Log Project Status
 
 ## To Do Next
-- Commit
 - Change naming of Drive directory structure
 - Show state in UI
 - Show uploaded media in UI before saving
