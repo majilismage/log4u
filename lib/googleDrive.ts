@@ -3,6 +3,7 @@ import { JWT } from 'google-auth-library';
 import { Readable } from 'stream';
 import crypto from 'crypto';
 import { format } from 'date-fns';
+import { logger } from './logger';
 
 interface FolderStructure {
   yearId: string;
@@ -23,6 +24,21 @@ interface UploadParams {
   };
 }
 
+interface UploadResponse {
+  success: true;
+  fileId: string;
+  webViewLink: string;
+  path: string;
+  mediaType: 'image' | 'video';
+}
+
+interface UploadError {
+  success: false;
+  error: string;
+}
+
+type UploadResult = UploadResponse | UploadError;
+
 export async function uploadToGoogleDrive({
   file,
   fileName,
@@ -30,8 +46,14 @@ export async function uploadToGoogleDrive({
   journeyDate,
   journeyId,
   location
-}: UploadParams) {
+}: UploadParams): Promise<UploadResult> {
   try {
+    logger.info('Starting Google Drive upload', { 
+      journeyId,
+      fileName,
+      mimeType 
+    });
+
     // Create JWT client
     const auth = new JWT({
       email: process.env.GOOGLE_DRIVE_CLIENT_EMAIL,
@@ -39,11 +61,14 @@ export async function uploadToGoogleDrive({
       scopes: ['https://www.googleapis.com/auth/drive.file'],
     });
 
+    logger.debug('Created JWT client for Google Drive');
+
     // Create Drive client
     const drive = google.drive({ version: 'v3', auth });
 
     // Get or create folder structure
     const folders = await ensureFolderStructure(drive, journeyDate, journeyId, mimeType);
+    logger.debug('Created/retrieved folder structure', { folders });
     
     // Generate secure filename
     const locationPart = `${location.town}-${location.country}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -81,6 +106,8 @@ export async function uploadToGoogleDrive({
     });
 
     if (response.data.id) {
+      logger.debug('File uploaded successfully', { fileId: response.data.id });
+
       // Set permissions - anyone with the link can view
       await drive.permissions.create({
         fileId: response.data.id,
@@ -90,23 +117,38 @@ export async function uploadToGoogleDrive({
         },
       });
 
+      logger.debug('File permissions set to anyone with link');
+
       // Get the web view link
       const fileData = await drive.files.get({
         fileId: response.data.id,
         fields: 'webViewLink,id',
       });
 
-      return {
-        success: true,
+      if (!fileData.data.webViewLink) {
+        throw new Error('Failed to get web view link');
+      }
+
+      const result = {
+        success: true as const,
         fileId: response.data.id,
         webViewLink: fileData.data.webViewLink,
-        path: `${journeyDate.getFullYear()}/${(journeyDate.getMonth() + 1).toString().padStart(2, '0')}/${journeyId}/${mimeType.includes('image') ? 'images' : 'videos'}/${secureFileName}`
+        path: `${journeyDate.getFullYear()}/${(journeyDate.getMonth() + 1).toString().padStart(2, '0')}/${journeyId}/${mimeType.includes('image') ? 'images' : 'videos'}/${secureFileName}`,
+        mediaType: mimeType.includes('image') ? 'image' as const : 'video' as const
       };
+
+      logger.info('Successfully uploaded media to Drive', {
+        journeyId,
+        mediaType: result.mediaType,
+        path: result.path
+      });
+
+      return result;
     }
 
     throw new Error('Failed to upload file');
   } catch (error) {
-    console.error('Google Drive upload error:', error);
+    logger.error('Google Drive upload error', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to upload file',

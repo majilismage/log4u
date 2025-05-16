@@ -1,5 +1,6 @@
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
+import { logger } from './logger';
 
 // Types for our travel log entry
 interface LocationData {
@@ -10,6 +11,7 @@ interface LocationData {
 }
 
 interface TravelLogEntry {
+  journeyId: string;
   departureDate: string;
   arrivalDate: string;
   fromTown: string;
@@ -24,12 +26,23 @@ interface TravelLogEntry {
   avgSpeed: string;
   maxSpeed: string;
   notes: string;
-  mediaLinks?: string; // JSON string of media links
+  imageLinks?: string; // JSON string of image links
+  videoLinks?: string; // JSON string of video links
 }
 
 export async function saveToGoogleSheets(entry: TravelLogEntry) {
   try {
-    console.log('GoogleSheets: Starting save operation');
+    // Validate required fields
+    if (!entry.journeyId) {
+      logger.error('Missing journeyId in sheet entry');
+      throw new Error('Journey ID is required');
+    }
+
+    logger.info('Starting Google Sheets entry save', { 
+      journeyId: entry.journeyId,
+      hasImageLinks: !!entry.imageLinks,
+      hasVideoLinks: !!entry.videoLinks
+    });
     
     // Create JWT client
     const serviceAccountAuth = new JWT({
@@ -40,23 +53,22 @@ export async function saveToGoogleSheets(entry: TravelLogEntry) {
       ],
     });
 
-    console.log('GoogleSheets: Created JWT client');
+    logger.debug('Created JWT client for Google Sheets');
 
     // Initialize the sheet
-    console.log('GoogleSheets: Initializing with Sheet ID:', process.env.GOOGLE_SHEETS_SHEET_ID);
     const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEETS_SHEET_ID!, serviceAccountAuth);
     
     // Load the document properties and sheets
-    console.log('GoogleSheets: Loading document info');
     await doc.loadInfo();
-    console.log('GoogleSheets: Document title:', doc.title);
+    logger.debug('Loaded Google Sheet', { sheetTitle: doc.title });
 
     // Get the first sheet
     const sheet = doc.sheetsByIndex[0];
-    console.log('GoogleSheets: Accessed first sheet:', sheet.title);
+    logger.debug('Accessed sheet', { sheetTitle: sheet.title });
 
     // Prepare the row data
     const newRow = {
+      'Journey ID': entry.journeyId || '',  // Ensure non-null
       'Departure Date': entry.departureDate,
       'Arrival Date': entry.arrivalDate,
       'From Town': entry.fromTown,
@@ -71,20 +83,31 @@ export async function saveToGoogleSheets(entry: TravelLogEntry) {
       'Average Speed': entry.avgSpeed,
       'Max Speed': entry.maxSpeed,
       'Notes': entry.notes,
-      'Media Links': entry.mediaLinks || '',
+      'Image Links': entry.imageLinks || '',
+      'Video Links': entry.videoLinks || '',
       'Timestamp': new Date().toISOString(),
     };
 
-    console.log('GoogleSheets: Prepared row data:', newRow);
+    logger.debug('Prepared row data for sheet', { 
+      journeyId: entry.journeyId,
+      hasImageLinks: !!entry.imageLinks,
+      hasVideoLinks: !!entry.videoLinks,
+      imageLinksValue: entry.imageLinks || 'none',
+      videoLinksValue: entry.videoLinks || 'none'
+    });
 
     // Add the row to the sheet
-    console.log('GoogleSheets: Attempting to add row');
     await sheet.addRow(newRow);
-    console.log('GoogleSheets: Successfully added row');
+    logger.info('Successfully added row to sheet', { 
+      journeyId: entry.journeyId,
+      timestamp: newRow.Timestamp,
+      imageLinks: !!entry.imageLinks,
+      videoLinks: !!entry.videoLinks
+    });
 
     return { success: true };
   } catch (error) {
-    console.error('GoogleSheets: Error details:', error);
+    logger.error('Failed to save entry to Google Sheets', error);
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save entry' };
   }
 } 

@@ -4,3 +4,45 @@
 {"timestamp":"2025-05-16 09:53:29.931","level":"DEBUG","message":"Converting file to buffer","data":{"fileName":"Metrics Title Image.png","fileSize":2814354}}
 {"timestamp":"2025-05-16 09:53:29.931","level":"INFO","message":"Starting Google Drive upload","data":{"fileName":"Metrics Title Image.png","journeyId":"1747382007278"}}
 {"timestamp":"2025-05-16 09:53:40.807","level":"INFO","message":"Upload completed successfully","data":{"fileId":"1pfg12bgeDLxJ5jl4wRTvkcTghyPIt2a7","path":"2025/05/1747382007278/images/to-town-to-country_16-May-2025_metrics-title-image_ea3428.png"}}
+{"timestamp":"2025-05-16 14:53:13.728","level":"INFO","message":"Starting media upload request","data":null}
+{"timestamp":"2025-05-16 14:53:13.737","level":"DEBUG","message":"Form data received","data":{"fields":["file","journeyId","town","country","journeyDate"]}}
+{"timestamp":"2025-05-16 14:53:13.737","level":"DEBUG","message":"Parsed form fields","data":{"hasFile":true,"fileName":"Metrics Title Image.png","fileType":"image/png","journeyId":"1747399991297","town":"to town","country":"to country","journeyDate":"2025-05-16T12:52:46.124Z"}}
+{"timestamp":"2025-05-16 14:53:13.737","level":"DEBUG","message":"Converting file to buffer","data":{"fileName":"Metrics Title Image.png","fileSize":2814354}}
+{"timestamp":"2025-05-16 14:53:13.738","level":"INFO","message":"Starting Google Drive upload","data":{"fileName":"Metrics Title Image.png","journeyId":"1747399991297"}}
+{"timestamp":"2025-05-16 14:53:26.686","level":"INFO","message":"Upload completed successfully","data":{"fileId":"1IBB64EOLr3F4HcNYw5lK_nDCgaV68hTB","path":"2025/05/1747399991297/images/to-town-to-country_16-May-2025_metrics-title-image_37ed6a.png"}}
+{"timestamp":"2025-05-16 15:01:26.679","level":"INFO","message":"Starting media upload request","data":null}
+{"timestamp":"2025-05-16 15:01:26.707","level":"DEBUG","message":"Form data received","data":{"fields":["file","journeyId","town","country","journeyDate"]}}
+{"timestamp":"2025-05-16 15:01:26.707","level":"DEBUG","message":"Parsed form fields","data":{"hasFile":true,"fileName":"Metrics Title Image.png","fileType":"image/png","journeyId":"1747400485559","town":"to town","country":"to country","journeyDate":"2025-05-16T13:01:06.405Z"}}
+{"timestamp":"2025-05-16 15:01:26.708","level":"DEBUG","message":"Converting file to buffer","data":{"fileName":"Metrics Title Image.png","fileSize":2814354}}
+{"timestamp":"2025-05-16 15:01:26.708","level":"INFO","message":"Starting Google Drive upload","data":{"fileName":"Metrics Title Image.png","journeyId":"1747400485559"}}
+{"timestamp":"2025-05-16 15:01:26.708","level":"INFO","message":"Starting Google Drive upload","data":{"journeyId":"1747400485559","fileName":"Metrics Title Image.png","mimeType":"image/png"}}
+{"timestamp":"2025-05-16 15:01:26.709","level":"DEBUG","message":"Created JWT client for Google Drive","data":null}
+{"timestamp":"2025-05-16 15:01:26.994","level":"INFO","message":"Starting Google Sheets entry save","data":{}}
+{"timestamp":"2025-05-16 15:01:26.994","level":"DEBUG","message":"Created JWT client for Google Sheets","data":null}
+{"timestamp":"2025-05-16 15:01:28.606","level":"DEBUG","message":"Loaded Google Sheet","data":{"sheetTitle":"Log4u-test"}}
+{"timestamp":"2025-05-16 15:01:28.606","level":"DEBUG","message":"Accessed sheet","data":{"sheetTitle":"Sheet1"}}
+{"timestamp":"2025-05-16 15:01:28.606","level":"DEBUG","message":"Prepared row data for sheet","data":{"hasImageLinks":false,"hasVideoLinks":false}}
+{"timestamp":"2025-05-16 15:01:30.088","level":"INFO","message":"Successfully added row to sheet","data":{"timestamp":"2025-05-16T13:01:28.606Z"}}
+{"timestamp":"2025-05-16 15:01:30.827","level":"DEBUG","message":"Created/retrieved folder structure","data":{"folders":{"yearId":"1k1swu9pG0Izso2Lf_koe_572_C3RErnW","monthId":"1tSufFfCA9wRfVijs1LniJIVVMRyGg1Dz","journeyId":"1eeXea1yKipl8vAAmX-mfuZxBidFkAun1","mediaTypeId":"13dMtKyYmZE5wd9gyHE5gWqOa23pLetRf"}}}
+{"timestamp":"2025-05-16 15:01:43.709","level":"DEBUG","message":"File uploaded successfully","data":{"fileId":"1HlM2ApscmjEqtf7ySR8GNZPwcaLb99AW"}}
+{"timestamp":"2025-05-16 15:01:44.893","level":"DEBUG","message":"File permissions set to anyone with link","data":null}
+{"timestamp":"2025-05-16 15:01:45.228","level":"INFO","message":"Successfully uploaded media to Drive","data":{"journeyId":"1747400485559","mediaType":"image","path":"2025/05/1747400485559/images/to-town-to-country_16-May-2025_metrics-title-image_8b212c.png"}}
+{"timestamp":"2025-05-16 15:01:45.228","level":"INFO","message":"Upload completed successfully","data":{"fileId":"1HlM2ApscmjEqtf7ySR8GNZPwcaLb99AW","path":"2025/05/1747400485559/images/to-town-to-country_16-May-2025_metrics-title-image_8b212c.png"}}
+{"timestamp":"2025-05-16 15:08:40.688","level":"INFO","message":"Starting Google Sheets entry save","data":{"journeyId":"1747400919228","hasImageLinks":false,"hasVideoLinks":false}}
+{"timestamp":"2025-05-16 15:08:40.689","level":"DEBUG","message":"Created JWT client for Google Sheets","data":null}
+{"timestamp":"2025-05-16 15:08:41.835","level":"INFO","message":"Starting media upload request","data":null}
+{"timestamp":"2025-05-16 15:08:41.977","level":"DEBUG","message":"Form data received","data":{"fields":["file","journeyId","town","country","journeyDate"]}}
+{"timestamp":"2025-05-16 15:08:41.978","level":"DEBUG","message":"Parsed form fields","data":{"hasFile":true,"fileName":"Metrics Title Image.png","fileType":"image/png","journeyId":"1747400919228","town":"to town","country":"to country","journeyDate":"2025-05-16T13:08:24.532Z"}}
+{"timestamp":"2025-05-16 15:08:41.978","level":"DEBUG","message":"Converting file to buffer","data":{"fileName":"Metrics Title Image.png","fileSize":2814354}}
+{"timestamp":"2025-05-16 15:08:41.978","level":"INFO","message":"Starting Google Drive upload","data":{"fileName":"Metrics Title Image.png","journeyId":"1747400919228"}}
+{"timestamp":"2025-05-16 15:08:41.979","level":"INFO","message":"Starting Google Drive upload","data":{"journeyId":"1747400919228","fileName":"Metrics Title Image.png","mimeType":"image/png"}}
+{"timestamp":"2025-05-16 15:08:41.979","level":"DEBUG","message":"Created JWT client for Google Drive","data":null}
+{"timestamp":"2025-05-16 15:08:43.499","level":"DEBUG","message":"Loaded Google Sheet","data":{"sheetTitle":"Log4u-test"}}
+{"timestamp":"2025-05-16 15:08:43.499","level":"DEBUG","message":"Accessed sheet","data":{"sheetTitle":"Sheet1"}}
+{"timestamp":"2025-05-16 15:08:43.500","level":"DEBUG","message":"Prepared row data for sheet","data":{"journeyId":"1747400919228","hasImageLinks":false,"hasVideoLinks":false,"imageLinksValue":"none","videoLinksValue":"none"}}
+{"timestamp":"2025-05-16 15:08:44.506","level":"INFO","message":"Successfully added row to sheet","data":{"journeyId":"1747400919228","timestamp":"2025-05-16T13:08:43.499Z","imageLinks":false,"videoLinks":false}}
+{"timestamp":"2025-05-16 15:08:45.881","level":"DEBUG","message":"Created/retrieved folder structure","data":{"folders":{"yearId":"1k1swu9pG0Izso2Lf_koe_572_C3RErnW","monthId":"1tSufFfCA9wRfVijs1LniJIVVMRyGg1Dz","journeyId":"1HE6VUWGdFqXzJSltPOktblfHFfTpTJd6","mediaTypeId":"1LjhZVEg-ML_S3z8FLMKX3S-epwfcS6RW"}}}
+{"timestamp":"2025-05-16 15:08:54.864","level":"DEBUG","message":"File uploaded successfully","data":{"fileId":"19MOCnc2Sy-hm6M77zfoh3ezln4Kj487k"}}
+{"timestamp":"2025-05-16 15:08:55.893","level":"DEBUG","message":"File permissions set to anyone with link","data":null}
+{"timestamp":"2025-05-16 15:08:56.185","level":"INFO","message":"Successfully uploaded media to Drive","data":{"journeyId":"1747400919228","mediaType":"image","path":"2025/05/1747400919228/images/to-town-to-country_16-May-2025_metrics-title-image_e44209.png"}}
+{"timestamp":"2025-05-16 15:08:56.185","level":"INFO","message":"Upload completed successfully","data":{"fileId":"19MOCnc2Sy-hm6M77zfoh3ezln4Kj487k","path":"2025/05/1747400919228/images/to-town-to-country_16-May-2025_metrics-title-image_e44209.png"}}

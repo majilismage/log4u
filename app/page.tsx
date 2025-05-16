@@ -33,6 +33,7 @@ interface TravelEntry {
 export default function TravelLog() {
   const [departureDate, setDepartureDate] = useState<Date>(new Date())
   const [arrivalDate, setArrivalDate] = useState<Date>(new Date())
+  const [journeyId, setJourneyId] = useState<string>("")
   const [fromTown, setFromTown] = useState("")
   const [fromCountry, setFromCountry] = useState("")
   const [fromLat, setFromLat] = useState("")
@@ -52,11 +53,17 @@ export default function TravelLog() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      // Generate journey ID if not already set
+      const currentJourneyId = journeyId || Date.now().toString();
+      if (!journeyId) {
+        setJourneyId(currentJourneyId);
+      }
+
       const uploadedFiles = Array.from(e.target.files);
       const uploadPromises = uploadedFiles.map(async (file) => {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('journeyId', Date.now().toString());
+        formData.append('journeyId', currentJourneyId);
         formData.append('town', toTown);
         formData.append('country', toCountry);
         formData.append('journeyDate', arrivalDate.toISOString());
@@ -95,7 +102,14 @@ export default function TravelLog() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Generate journey ID if not already set (no images uploaded)
+    const currentJourneyId = journeyId || Date.now().toString();
+    if (!journeyId) {
+      setJourneyId(currentJourneyId);
+    }
+
     const entry = {
+      journeyId: currentJourneyId,
       departureDate: format(departureDate, "yyyy-MM-dd"),
       arrivalDate: format(arrivalDate, "yyyy-MM-dd"),
       fromTown,
@@ -110,7 +124,7 @@ export default function TravelLog() {
       avgSpeed,
       maxSpeed,
       notes,
-      mediaLinks: images.length > 0 ? JSON.stringify(images) : undefined,
+      imageLinks: images.length > 0 ? JSON.stringify(images) : undefined,
     };
 
     try {
@@ -130,7 +144,7 @@ export default function TravelLog() {
 
       // Add to local state only if save was successful
       const newEntry: TravelEntry = {
-        id: Date.now().toString(),
+        id: currentJourneyId,
         departureDate,
         arrivalDate,
         from: `${fromTown}, ${fromCountry}`,
@@ -145,6 +159,7 @@ export default function TravelLog() {
       setEntries([newEntry, ...entries]);
 
       // Reset form
+      setJourneyId("");  // Reset journey ID for next entry
       setFromTown("");
       setFromCountry("");
       setFromLat("");
