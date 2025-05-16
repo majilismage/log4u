@@ -1,4 +1,4 @@
-  "use client"
+"use client"
 
 import type React from "react"
 
@@ -16,6 +16,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { generateMockJourneyData } from "@/lib/mockDataGenerator"
+import { useLoading } from "@/lib/LoadingContext"
+import { FilePreview } from "@/components/FilePreview"
 
 interface TravelEntry {
   id: string
@@ -50,17 +53,38 @@ export default function TravelLog() {
   const [images, setImages] = useState<string[]>([])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [showAllImages, setShowAllImages] = useState(false)
+  const { setLoading, setProgress } = useLoading()
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      console.log('Starting file upload process', {
+        fileCount: e.target.files.length,
+        fileTypes: Array.from(e.target.files).map(f => f.type),
+        fileSizes: Array.from(e.target.files).map(f => f.size)
+      });
+      
+      setLoading(true, 'Uploading media files...');
+      
       // Generate journey ID if not already set
       const currentJourneyId = journeyId || Date.now().toString();
+      console.log('Journey ID for upload:', currentJourneyId);
+      
       if (!journeyId) {
         setJourneyId(currentJourneyId);
       }
 
       const uploadedFiles = Array.from(e.target.files);
+      const totalFiles = uploadedFiles.length;
+      let completedFiles = 0;
+
       const uploadPromises = uploadedFiles.map(async (file) => {
+        console.log('Preparing to upload file:', {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        });
+
         const formData = new FormData();
         formData.append('file', file);
         formData.append('journeyId', currentJourneyId);
@@ -69,6 +93,7 @@ export default function TravelLog() {
         formData.append('journeyDate', arrivalDate.toISOString());
 
         try {
+          console.log('Sending upload request for:', file.name);
           const response = await fetch('/api/upload-media', {
             method: 'POST',
             body: formData,
@@ -76,8 +101,19 @@ export default function TravelLog() {
 
           const result = await response.json();
           if (!result.success) {
+            console.error('Upload failed for file:', file.name, result.error);
             throw new Error(result.error || 'Failed to upload file');
           }
+
+          completedFiles++;
+          const progress = (completedFiles / totalFiles) * 100;
+          console.log('Upload progress:', {
+            file: file.name,
+            completed: completedFiles,
+            total: totalFiles,
+            progress: progress
+          });
+          setProgress(progress);
 
           return {
             url: result.webViewLink,
@@ -85,7 +121,7 @@ export default function TravelLog() {
             name: file.name,
           };
         } catch (error) {
-          console.error('Error uploading file:', error);
+          console.error('Error uploading file:', file.name, error);
           return null;
         }
       });
@@ -93,41 +129,138 @@ export default function TravelLog() {
       const results = await Promise.all(uploadPromises);
       const successfulUploads = results.filter((result): result is { url: string; fileId: string; name: string } => result !== null);
       
+      console.log('Upload process completed', {
+        totalFiles,
+        successfulUploads: successfulUploads.length,
+        failedUploads: totalFiles - successfulUploads.length
+      });
+      
       if (successfulUploads.length > 0) {
         setImages(prev => [...prev, ...successfulUploads.map(upload => upload.url)]);
       }
+
+      setLoading(false);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      setSelectedFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFiles = async (journeyId: string): Promise<string[]> => {
+    if (selectedFiles.length === 0) return [];
+
+    console.log('Starting file upload process', {
+      fileCount: selectedFiles.length,
+      fileTypes: selectedFiles.map(f => f.type),
+      fileSizes: selectedFiles.map(f => f.size)
+    });
+
+    const totalFiles = selectedFiles.length;
+    let completedFiles = 0;
+
+    const uploadPromises = selectedFiles.map(async (file) => {
+      console.log('Preparing to upload file:', {
+        name: file.name,
+        type: file.type,
+        size: file.size
+      });
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('journeyId', journeyId);
+      formData.append('town', toTown);
+      formData.append('country', toCountry);
+      formData.append('journeyDate', arrivalDate.toISOString());
+
+      try {
+        console.log('Sending upload request for:', file.name);
+        const response = await fetch('/api/upload-media', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+          console.error('Upload failed for file:', file.name, result.error);
+          throw new Error(result.error || 'Failed to upload file');
+        }
+
+        completedFiles++;
+        const progress = (completedFiles / totalFiles) * 100;
+        console.log('Upload progress:', {
+          file: file.name,
+          completed: completedFiles,
+          total: totalFiles,
+          progress: progress
+        });
+        setProgress(progress);
+
+        return result.webViewLink;
+      } catch (error) {
+        console.error('Error uploading file:', file.name, error);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(uploadPromises);
+    const successfulUploads = results.filter((url): url is string => url !== null);
+
+    console.log('Upload process completed', {
+      totalFiles,
+      successfulUploads: successfulUploads.length,
+      failedUploads: totalFiles - successfulUploads.length
+    });
+
+    return successfulUploads;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true, 'Processing your entry...');
 
-    // Generate journey ID if not already set (no images uploaded)
-    const currentJourneyId = journeyId || Date.now().toString();
+    // Generate journey ID if not already set
+    const currentJourneyId = journeyId || `J${Date.now()}`;
     if (!journeyId) {
       setJourneyId(currentJourneyId);
     }
 
-    const entry = {
-      journeyId: currentJourneyId,
-      departureDate: format(departureDate, "yyyy-MM-dd"),
-      arrivalDate: format(arrivalDate, "yyyy-MM-dd"),
-      fromTown,
-      fromCountry,
-      fromLat: parseFloat(fromLat),
-      fromLng: parseFloat(fromLng),
-      toTown,
-      toCountry,
-      toLat: parseFloat(toLat),
-      toLng: parseFloat(toLng),
-      distance,
-      avgSpeed,
-      maxSpeed,
-      notes,
-      imageLinks: images.length > 0 ? JSON.stringify(images) : undefined,
-    };
-
     try {
+      // First upload any files
+      if (selectedFiles.length > 0) {
+        setLoading(true, 'Uploading media files...');
+        const uploadedUrls = await uploadFiles(currentJourneyId);
+        setImages(prev => [...prev, ...uploadedUrls]);
+      }
+
+      setLoading(true, 'Saving travel entry...');
+      
+      const entry = {
+        journeyId: currentJourneyId,
+        departureDate: format(departureDate, "yyyy-MM-dd"),
+        arrivalDate: format(arrivalDate, "yyyy-MM-dd"),
+        fromTown,
+        fromCountry,
+        fromLat: parseFloat(fromLat),
+        fromLng: parseFloat(fromLng),
+        toTown,
+        toCountry,
+        toLat: parseFloat(toLat),
+        toLng: parseFloat(toLng),
+        distance,
+        avgSpeed,
+        maxSpeed,
+        notes,
+        imageLinks: images.length > 0 ? JSON.stringify(images) : undefined,
+      };
+
       const response = await fetch('/api/save-entry', {
         method: 'POST',
         headers: {
@@ -159,7 +292,7 @@ export default function TravelLog() {
       setEntries([newEntry, ...entries]);
 
       // Reset form
-      setJourneyId("");  // Reset journey ID for next entry
+      setJourneyId("");
       setFromTown("");
       setFromCountry("");
       setFromLat("");
@@ -173,11 +306,13 @@ export default function TravelLog() {
       setMaxSpeed("");
       setNotes("");
       setImages([]);
+      setSelectedFiles([]);
 
     } catch (error) {
-      console.error('Error saving entry:', error);
+      console.error('Error processing entry:', error);
       // Here you might want to show an error message to the user
-      // You can add a toast notification or error state to display to the user
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -205,9 +340,40 @@ export default function TravelLog() {
   // Get recent images (last 10)
   const recentImages = entries.flatMap((entry) => entry.images).slice(0, 10)
 
+  const handleGenerateData = () => {
+    const mockData = generateMockJourneyData();
+    setDepartureDate(new Date(mockData.departureDate));
+    setArrivalDate(new Date(mockData.arrivalDate));
+    setJourneyId(mockData.journeyId);
+    setFromTown(mockData.fromTown);
+    setFromCountry(mockData.fromCountry);
+    setFromLat(mockData.fromLat.toString());
+    setFromLng(mockData.fromLng.toString());
+    setToTown(mockData.toTown);
+    setToCountry(mockData.toCountry);
+    setToLat(mockData.toLat.toString());
+    setToLng(mockData.toLng.toString());
+    setDistance(mockData.distance);
+    setAvgSpeed(mockData.avgSpeed);
+    setMaxSpeed(mockData.maxSpeed);
+    setNotes(mockData.notes);
+  };
+
   return (
     <div className="container mx-auto py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-8 text-center">Travel Log</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-center flex-grow">Travel Log</h1>
+        {process.env.NODE_ENV === 'development' && (
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleGenerateData}
+            className="absolute top-4 right-4"
+          >
+            Generate Data
+          </Button>
+        )}
+      </div>
 
       <Tabs defaultValue="form" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
@@ -412,40 +578,21 @@ export default function TravelLog() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="images">Upload Images/Videos</Label>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById("image-upload")?.click()}
-                      className="w-full"
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      Select Files
-                    </Button>
-                    <Input
-                      id="image-upload"
-                      type="file"
-                      multiple
-                      accept="image/*,video/*"
-                      className="hidden"
-                      onChange={handleImageUpload}
+                <div className="space-y-4">
+                  <Label htmlFor="images">Images</Label>
+                  <Input
+                    id="images"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="cursor-pointer"
+                  />
+                  {selectedFiles.length > 0 && (
+                    <FilePreview
+                      files={selectedFiles}
+                      onRemove={removeFile}
                     />
-                  </div>
-
-                  {images.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {images.map((img, index) => (
-                        <div key={index} className="relative w-16 h-16 rounded overflow-hidden">
-                          <img
-                            src={img || "/placeholder.svg"}
-                            alt={`Preview ${index}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ))}
-                    </div>
                   )}
                 </div>
 
