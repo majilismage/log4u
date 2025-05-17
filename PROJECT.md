@@ -30,6 +30,7 @@
 - Support for multiple file selection
 - Delayed upload until form submission
 - Progress tracking during upload
+- Enhanced Media Gallery: Displays all media (images and videos) from Google Drive in a responsive, lazy-loaded grid, using direct thumbnail links for efficient loading.
 - Proper error handling and logging
 - Improved Google Drive folder structure management:
   - Singleton pattern for folder management to prevent duplicates
