@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   try {
     console.log('API Route: Received save request');
     const entry = await request.json();
-    console.log('API Route: Entry data:', entry);
+    console.log('API Route: Entry data:', entry, typeof entry.imageLinks, entry.imageLinks);
     
     // Log environment variables (without exposing sensitive data)
     console.log('API Route: Checking environment variables:');

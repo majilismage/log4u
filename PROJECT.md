@@ -3,8 +3,10 @@
 ## To Do Next
 - Change naming of Drive directory structure
 - Show state in UI
-- Show uploaded media in UI before saving
 - Add media link to Google Sheet
+- Add error toast notifications for better user feedback
+- Add loading states for individual form fields during API calls
+- Implement proper error handling for file upload failures
 
 ## Completed Features
 
@@ -12,6 +14,7 @@
 - Next.js 15.2.4 application with TypeScript
 - Modern UI using Tailwind CSS and Radix UI components
 - Three main tabs: New Entry, Gallery, and History
+- Accessible modal dialogs with proper ARIA labels and descriptions
 
 ### Form Implementation
 - Basic travel log entry form with:
@@ -19,7 +22,17 @@
   - Location details (town, country, latitude, longitude) for both departure and arrival
   - Distance, Average Speed, and Max Speed inputs
   - Notes field
-  - Image upload capability (UI only)
+  - Image upload with preview functionality
+  - Ability to remove selected files before upload
+  - Progress tracking during file upload
+
+### Media Management
+- File preview grid with hover-to-remove functionality
+- Support for multiple file selection
+- Delayed upload until form submission
+- Progress tracking during upload
+- Proper error handling and logging
+- Organized file storage in Google Drive
 
 ### Google Sheets Integration
 - Service account authentication
@@ -29,6 +42,7 @@
   - Location details (town, country, coordinates)
   - Journey metrics (distance, speeds)
   - Timestamps for record keeping
+  - Media links from Google Drive
 
 ## Planned Features
 
@@ -45,12 +59,6 @@
 - Clear button for manual override
 - Maintain location data structure in form state
 - Allow user overrides while keeping data integrity
-
-### Image Management
-- Implement actual image upload functionality
-- Store image references in Google Sheets
-- Gallery view improvements
-- Image preview capabilities
 
 ### Rich Text Editor
 - Ability to add text style and formatting
@@ -71,9 +79,7 @@
   - Average speed
 
 ## Technical Debt & Improvements
-- Add error toast notifications for better user feedback
 - Implement input validation for all form fields
-- Add loading states during API calls
 - Improve error handling in Google Sheets integration
 - Add retry mechanism for failed saves
 - Implement proper type checking throughout the application
@@ -82,6 +88,10 @@
   - Consider implementing domain-restricted access
   - Add file access auditing
   - Implement role-based access control for media files
+- Add comprehensive error handling for network failures
+- Implement file upload resume capability for large files
+- Add file type validation and size limits
+- Implement client-side image optimization before upload
 
 ## Environment Setup
 Required environment variables in `.env.local`:
