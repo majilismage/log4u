@@ -154,9 +154,9 @@ export default function TravelLog() {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Upload files and return the folder link (for images or videos)
-  const uploadFiles = async (journeyId: string): Promise<string | undefined> => {
-    if (selectedFiles.length === 0) return undefined;
+  // Upload files and return the folder links (for images and videos)
+  const uploadFiles = async (journeyId: string): Promise<{ imageFolderUrl?: string; videoFolderUrl?: string }> => {
+    if (selectedFiles.length === 0) return {};
 
     console.log('Starting file upload process', {
       fileCount: selectedFiles.length,
@@ -164,7 +164,8 @@ export default function TravelLog() {
       fileSizes: selectedFiles.map(f => f.size)
     });
 
-    let folderLink: string | undefined = undefined;
+    let imageFolderUrl: string | undefined;
+    let videoFolderUrl: string | undefined;
     const totalFiles = selectedFiles.length;
     let completedFiles = 0;
 
@@ -201,31 +202,44 @@ export default function TravelLog() {
           file: file.name,
           completed: completedFiles,
           total: totalFiles,
-          progress: progress
+          progress: progress,
+          mediaType: result.mediaType,
+          folderLink: result.folderLink
         });
         setProgress(progress);
 
-        // Save the folder link from the first successful upload
-        if (!folderLink && result.folderLink) {
-          folderLink = result.folderLink;
-          console.log('Captured folder link:', folderLink);
+        // Save the folder links based on media type, preserving existing links
+        if (result.mediaType === 'image' && result.folderLink) {
+          imageFolderUrl = result.folderLink;
+        } else if (result.mediaType === 'video' && result.folderLink) {
+          videoFolderUrl = result.folderLink;
         }
 
-        return result.webViewLink;
+        return {
+          url: result.webViewLink,
+          fileId: result.fileId,
+          name: file.name,
+          type: result.mediaType
+        };
       } catch (error) {
         console.error('Error uploading file:', file.name, error);
         return null;
       }
     });
 
-    await Promise.all(uploadPromises);
+    const results = await Promise.all(uploadPromises);
 
     console.log('Upload process completed', {
       totalFiles,
-      folderLink
+      successfulUploads: results.filter(r => r !== null).length,
+      imageFolderUrl,
+      videoFolderUrl
     });
 
-    return folderLink;
+    return {
+      imageFolderUrl,
+      videoFolderUrl
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -239,15 +253,18 @@ export default function TravelLog() {
     }
 
     try {
-      let folderLink: string | undefined = undefined;
+      let imageFolderLink: string | undefined = undefined;
+      let videoFolderLink: string | undefined = undefined;
 
-      // First upload any files and get the folder link
+      // First upload any files and get the folder links
       if (selectedFiles.length > 0) {
         setLoading(true, 'Uploading media files...');
-        folderLink = await uploadFiles(currentJourneyId);
+        const { imageFolderUrl, videoFolderUrl } = await uploadFiles(currentJourneyId);
+        imageFolderLink = imageFolderUrl;
+        videoFolderLink = videoFolderUrl;
       }
 
-      // Then save the entry with the folder link as the imageLinks value
+      // Then save the entry with the folder links
       setLoading(true, 'Saving travel entry...');
       
       const entry = {
@@ -266,15 +283,15 @@ export default function TravelLog() {
         avgSpeed,
         maxSpeed,
         notes,
-        imageLinks: folderLink || undefined,
+        imageLinks: imageFolderLink || undefined,
+        videoLinks: videoFolderLink || undefined,
       };
 
       console.log('Saving entry with data:', {
         journeyId: currentJourneyId,
-        imageFolderLink: entry.imageLinks
+        imageFolderLink: entry.imageLinks,
+        videoFolderLink: entry.videoLinks
       });
-
-      console.log('About to save entry:', entry, typeof entry.imageLinks, entry.imageLinks);
 
       const response = await fetch('/api/save-entry', {
         method: 'POST',
@@ -301,7 +318,7 @@ export default function TravelLog() {
         avgSpeed: Number.parseFloat(avgSpeed),
         maxSpeed: Number.parseFloat(maxSpeed),
         notes,
-        images: folderLink ? [folderLink] : [],
+        images: imageFolderLink ? [imageFolderLink] : [],
       };
 
       setEntries([newEntry, ...entries]);
@@ -594,11 +611,11 @@ export default function TravelLog() {
                 </div>
 
                 <div className="space-y-4">
-                  <Label htmlFor="images">Images</Label>
+                  <Label htmlFor="media">Upload Media (Images & Videos)</Label>
                   <Input
-                    id="images"
+                    id="media"
                     type="file"
-                    accept="image/*"
+                    accept="image/*, video/*"
                     multiple
                     onChange={handleFileSelect}
                     className="cursor-pointer"
