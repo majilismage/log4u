@@ -1,5 +1,6 @@
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
+import { logger } from './logger';
 
 // Types for our travel log entry
 interface LocationData {
@@ -10,6 +11,7 @@ interface LocationData {
 }
 
 interface TravelLogEntry {
+  journeyId: string;
   departureDate: string;
   arrivalDate: string;
   fromTown: string;
@@ -24,12 +26,28 @@ interface TravelLogEntry {
   avgSpeed: string;
   maxSpeed: string;
   notes: string;
-  mediaLinks?: string; // JSON string of media links
+  imageLinks?: string; // JSON string of image links
+  videoLinks?: string; // JSON string of video links
 }
 
 export async function saveToGoogleSheets(entry: TravelLogEntry) {
+  logger.error('DEBUG: Entered saveToGoogleSheets', { entry, typeofImageLinks: typeof entry.imageLinks, imageLinks: entry.imageLinks });
   try {
-    console.log('GoogleSheets: Starting save operation');
+    // Validate required fields
+    if (!entry.journeyId) {
+      logger.error('Missing journeyId in sheet entry');
+      throw new Error('Journey ID is required');
+    }
+
+    logger.info('Starting Google Sheets entry save', { 
+      journeyId: entry.journeyId,
+      mediaInfo: {
+        hasImages: !!entry.imageLinks,
+        hasVideos: !!entry.videoLinks,
+        imageLinksLength: typeof entry.imageLinks === 'string' ? entry.imageLinks.length : 0,
+        videoLinksLength: typeof entry.videoLinks === 'string' ? entry.videoLinks.length : 0
+      }
+    });
     
     // Create JWT client
     const serviceAccountAuth = new JWT({
@@ -40,23 +58,69 @@ export async function saveToGoogleSheets(entry: TravelLogEntry) {
       ],
     });
 
-    console.log('GoogleSheets: Created JWT client');
+    logger.debug('Created JWT client for Google Sheets');
 
     // Initialize the sheet
-    console.log('GoogleSheets: Initializing with Sheet ID:', process.env.GOOGLE_SHEETS_SHEET_ID);
     const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEETS_SHEET_ID!, serviceAccountAuth);
     
     // Load the document properties and sheets
-    console.log('GoogleSheets: Loading document info');
     await doc.loadInfo();
-    console.log('GoogleSheets: Document title:', doc.title);
+    logger.debug('Loaded Google Sheet', { sheetTitle: doc.title });
 
     // Get the first sheet
     const sheet = doc.sheetsByIndex[0];
-    console.log('GoogleSheets: Accessed first sheet:', sheet.title);
+    logger.debug('Accessed sheet', { sheetTitle: sheet.title });
+    await sheet.loadHeaderRow();
 
-    // Prepare the row data
+    // Check for required columns and log if missing
+    const requiredColumns = ['Images Link', 'Videos Link'];
+    const sheetHeaders = sheet.headerValues || [];
+    for (const col of requiredColumns) {
+      if (!sheetHeaders.includes(col)) {
+        logger.error('Google Sheets column missing', { column: col, availableColumns: sheetHeaders });
+      }
+    }
+
+    // Debug: log the raw value and type before parsing
+    logger.debug('Raw imageLinks value', { value: entry.imageLinks, type: typeof entry.imageLinks });
+    logger.debug('Raw videoLinks value', { value: entry.videoLinks, type: typeof entry.videoLinks });
+
+    // Parse and validate media links
+    let parsedImageLinks = '';
+    let parsedVideoLinks = '';
+    
+    // Only one of these branches should run for each field
+    if (entry.imageLinks && typeof entry.imageLinks === 'string' && entry.imageLinks.startsWith('https://drive.google.com/drive/folders/')) {
+      logger.debug('Branch: imageLinks is a folder link');
+      parsedImageLinks = entry.imageLinks;
+      logger.info('Saving image folder link to sheet', { imageFolderLink: parsedImageLinks });
+    } else if (entry.imageLinks) {
+      logger.debug('Branch: imageLinks is being parsed as JSON');
+      try {
+        const links = JSON.parse(entry.imageLinks);
+        parsedImageLinks = Array.isArray(links) ? JSON.stringify(links) : '';
+      } catch (e) {
+        logger.error('Failed to parse image links', { error: e, value: entry.imageLinks });
+      }
+    }
+
+    if (entry.videoLinks && typeof entry.videoLinks === 'string' && entry.videoLinks.startsWith('https://drive.google.com/drive/folders/')) {
+      logger.debug('Branch: videoLinks is a folder link');
+      parsedVideoLinks = entry.videoLinks;
+      logger.info('Saving video folder link to sheet', { videoFolderLink: parsedVideoLinks });
+    } else if (entry.videoLinks) {
+      logger.debug('Branch: videoLinks is being parsed as JSON');
+      try {
+        const links = JSON.parse(entry.videoLinks);
+        parsedVideoLinks = Array.isArray(links) ? JSON.stringify(links) : '';
+      } catch (e) {
+        logger.error('Failed to parse video links', { error: e, value: entry.videoLinks });
+      }
+    }
+
+    // Prepare the row data with correct column names
     const newRow = {
+      'Journey ID': entry.journeyId,
       'Departure Date': entry.departureDate,
       'Arrival Date': entry.arrivalDate,
       'From Town': entry.fromTown,
@@ -71,20 +135,34 @@ export async function saveToGoogleSheets(entry: TravelLogEntry) {
       'Average Speed': entry.avgSpeed,
       'Max Speed': entry.maxSpeed,
       'Notes': entry.notes,
-      'Media Links': entry.mediaLinks || '',
+      'Images Link': parsedImageLinks,
+      'Videos Link': parsedVideoLinks,
       'Timestamp': new Date().toISOString(),
     };
 
-    console.log('GoogleSheets: Prepared row data:', newRow);
+    logger.debug('Prepared row data for sheet', { 
+      journeyId: entry.journeyId,
+      imageLinks: parsedImageLinks,
+      videoLinks: parsedVideoLinks
+    });
 
     // Add the row to the sheet
-    console.log('GoogleSheets: Attempting to add row');
     await sheet.addRow(newRow);
-    console.log('GoogleSheets: Successfully added row');
+    logger.info('Successfully added row to sheet', { 
+      journeyId: entry.journeyId,
+      timestamp: newRow.Timestamp,
+      mediaInfo: {
+        hasImages: !!parsedImageLinks,
+        hasVideos: !!parsedVideoLinks
+      }
+    });
 
     return { success: true };
   } catch (error) {
-    console.error('GoogleSheets: Error details:', error);
+    logger.error('Failed to save entry to Google Sheets', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      journeyId: entry.journeyId
+    });
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save entry' };
   }
 } 

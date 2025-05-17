@@ -83,14 +83,16 @@ export async function POST(request: Request) {
 
     logger.info('Upload completed successfully', {
       fileId: result.fileId,
-      path: result.path
+      path: result.path,
+      folderLink: result.folderLink
     });
 
     return NextResponse.json({
       success: true,
       fileId: result.fileId,
       webViewLink: result.webViewLink,
-      path: result.path
+      path: result.path,
+      folderLink: result.folderLink
     });
   } catch (error) {
     logger.error('Unexpected error during upload', error);
