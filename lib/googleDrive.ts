@@ -30,6 +30,8 @@ interface UploadResponse {
   webViewLink: string;
   path: string;
   mediaType: 'image' | 'video';
+  folderId: string;
+  folderLink: string;
 }
 
 interface UploadError {
@@ -70,6 +72,12 @@ export async function uploadToGoogleDrive({
     const folders = await ensureFolderStructure(drive, journeyDate, journeyId, mimeType);
     logger.debug('Created/retrieved folder structure', { folders });
     
+    // Construct folder link
+    const mediaType = mimeType.includes('image') ? 'image' : 'video';
+    const folderId = folders.mediaTypeId;
+    const folderLink = `https://drive.google.com/drive/folders/${folderId}`;
+    logger.info('Media folder link', { mediaType, folderId, folderLink });
+
     // Generate secure filename
     const locationPart = `${location.town}-${location.country}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const datePart = format(journeyDate, 'dd-MMM-yyyy');
@@ -133,14 +141,17 @@ export async function uploadToGoogleDrive({
         success: true as const,
         fileId: response.data.id,
         webViewLink: fileData.data.webViewLink,
-        path: `${journeyDate.getFullYear()}/${(journeyDate.getMonth() + 1).toString().padStart(2, '0')}/${journeyId}/${mimeType.includes('image') ? 'images' : 'videos'}/${secureFileName}`,
-        mediaType: mimeType.includes('image') ? 'image' as const : 'video' as const
+        path: `${journeyDate.getFullYear()}/${(journeyDate.getMonth() + 1).toString().padStart(2, '0')}/${journeyId}/${mediaType === 'image' ? 'images' : 'videos'}/${secureFileName}`,
+        mediaType: mediaType as 'image' | 'video',
+        folderId,
+        folderLink
       };
 
       logger.info('Successfully uploaded media to Drive', {
         journeyId,
         mediaType: result.mediaType,
-        path: result.path
+        path: result.path,
+        folderLink: result.folderLink
       });
 
       return result;

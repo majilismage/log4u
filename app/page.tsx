@@ -154,8 +154,9 @@ export default function TravelLog() {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const uploadFiles = async (journeyId: string): Promise<string[]> => {
-    if (selectedFiles.length === 0) return [];
+  // Upload files and return the folder link (for images or videos)
+  const uploadFiles = async (journeyId: string): Promise<string | undefined> => {
+    if (selectedFiles.length === 0) return undefined;
 
     console.log('Starting file upload process', {
       fileCount: selectedFiles.length,
@@ -163,6 +164,7 @@ export default function TravelLog() {
       fileSizes: selectedFiles.map(f => f.size)
     });
 
+    let folderLink: string | undefined = undefined;
     const totalFiles = selectedFiles.length;
     let completedFiles = 0;
 
@@ -203,6 +205,12 @@ export default function TravelLog() {
         });
         setProgress(progress);
 
+        // Save the folder link from the first successful upload
+        if (!folderLink && result.folderLink) {
+          folderLink = result.folderLink;
+          console.log('Captured folder link:', folderLink);
+        }
+
         return result.webViewLink;
       } catch (error) {
         console.error('Error uploading file:', file.name, error);
@@ -210,16 +218,14 @@ export default function TravelLog() {
       }
     });
 
-    const results = await Promise.all(uploadPromises);
-    const successfulUploads = results.filter((url): url is string => url !== null);
+    await Promise.all(uploadPromises);
 
     console.log('Upload process completed', {
       totalFiles,
-      successfulUploads: successfulUploads.length,
-      failedUploads: totalFiles - successfulUploads.length
+      folderLink
     });
 
-    return successfulUploads;
+    return folderLink;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -233,13 +239,15 @@ export default function TravelLog() {
     }
 
     try {
-      // First upload any files
+      let folderLink: string | undefined = undefined;
+
+      // First upload any files and get the folder link
       if (selectedFiles.length > 0) {
         setLoading(true, 'Uploading media files...');
-        const uploadedUrls = await uploadFiles(currentJourneyId);
-        setImages(prev => [...prev, ...uploadedUrls]);
+        folderLink = await uploadFiles(currentJourneyId);
       }
 
+      // Then save the entry with the folder link as the imageLinks value
       setLoading(true, 'Saving travel entry...');
       
       const entry = {
@@ -258,8 +266,15 @@ export default function TravelLog() {
         avgSpeed,
         maxSpeed,
         notes,
-        imageLinks: images.length > 0 ? JSON.stringify(images) : undefined,
+        imageLinks: folderLink || undefined,
       };
+
+      console.log('Saving entry with data:', {
+        journeyId: currentJourneyId,
+        imageFolderLink: entry.imageLinks
+      });
+
+      console.log('About to save entry:', entry, typeof entry.imageLinks, entry.imageLinks);
 
       const response = await fetch('/api/save-entry', {
         method: 'POST',
@@ -286,7 +301,7 @@ export default function TravelLog() {
         avgSpeed: Number.parseFloat(avgSpeed),
         maxSpeed: Number.parseFloat(maxSpeed),
         notes,
-        images: [...images],
+        images: folderLink ? [folderLink] : [],
       };
 
       setEntries([newEntry, ...entries]);
