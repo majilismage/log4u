@@ -31,7 +31,16 @@
 - Delayed upload until form submission
 - Progress tracking during upload
 - Proper error handling and logging
-- Organized file storage in Google Drive with structured directory naming (year/month/journeyId/mediaType/filename)
+- Improved Google Drive folder structure management:
+  - Singleton pattern for folder management to prevent duplicates
+  - Promise-based caching to prevent race conditions
+  - Atomic folder structure creation
+  - Organized media files by type (images/videos) under journey folders
+  - Consistent folder hierarchy: year/month/journeyId/(images|videos)/filename
+  - Thread-safe folder operations
+  - Comprehensive logging and error tracking
+- Organized file storage in Google Drive with structured directory naming
+- Secure file naming with location, date, and hash components
 
 ### Google Sheets Integration
 - Service account authentication
@@ -91,6 +100,9 @@
 - Implement file upload resume capability for large files
 - Add file type validation and size limits
 - Implement client-side image optimization before upload
+- Consider implementing folder structure cleanup for failed uploads
+- Add periodic cache cleanup for the folder manager
+- Implement folder structure validation and repair utilities
 
 ## Environment Setup
 Required environment variables in `.env.local`:
