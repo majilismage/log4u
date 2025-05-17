@@ -1,9 +1,8 @@
 # Travel Log Project Status
 
 ## To Do Next
-- Change naming of Drive directory structure
 - Show state in UI
-- Add media link to Google Sheet
+- Add video link to Google Sheet
 - Add error toast notifications for better user feedback
 - Add loading states for individual form fields during API calls
 - Implement proper error handling for file upload failures
@@ -32,7 +31,16 @@
 - Delayed upload until form submission
 - Progress tracking during upload
 - Proper error handling and logging
-- Organized file storage in Google Drive
+- Improved Google Drive folder structure management:
+  - Singleton pattern for folder management to prevent duplicates
+  - Promise-based caching to prevent race conditions
+  - Atomic folder structure creation
+  - Organized media files by type (images/videos) under journey folders
+  - Consistent folder hierarchy: year/month/journeyId/(images|videos)/filename
+  - Thread-safe folder operations
+  - Comprehensive logging and error tracking
+- Organized file storage in Google Drive with structured directory naming
+- Secure file naming with location, date, and hash components
 
 ### Google Sheets Integration
 - Service account authentication
@@ -42,7 +50,7 @@
   - Location details (town, country, coordinates)
   - Journey metrics (distance, speeds)
   - Timestamps for record keeping
-  - Media links from Google Drive
+- Media folder links (images for now) from Google Drive are reliably saved to Google Sheets with each record
 
 ## Planned Features
 
@@ -92,6 +100,9 @@
 - Implement file upload resume capability for large files
 - Add file type validation and size limits
 - Implement client-side image optimization before upload
+- Consider implementing folder structure cleanup for failed uploads
+- Add periodic cache cleanup for the folder manager
+- Implement folder structure validation and repair utilities
 
 ## Environment Setup
 Required environment variables in `.env.local`:
@@ -122,5 +133,6 @@ Current columns:
 - Average Speed
 - Max Speed
 - Notes
-- Media Links
+- Images Link
+- Videos Link
 - Timestamp 

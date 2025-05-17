@@ -4,13 +4,7 @@ import { Readable } from 'stream';
 import crypto from 'crypto';
 import { format } from 'date-fns';
 import { logger } from './logger';
-
-interface FolderStructure {
-  yearId: string;
-  monthId: string;
-  journeyId: string;
-  mediaTypeId: string;
-}
+import { GoogleDriveFolderManager } from './GoogleDriveFolderManager';
 
 interface UploadParams {
   file: Buffer;
@@ -68,15 +62,26 @@ export async function uploadToGoogleDrive({
     // Create Drive client
     const drive = google.drive({ version: 'v3', auth });
 
+    const baseFolder = process.env.GOOGLE_DRIVE_BASE_FOLDER_ID;
+    if (!baseFolder) {
+      throw new Error('Base folder ID not configured');
+    }
+
+    // Get folder manager instance
+    const folderManager = GoogleDriveFolderManager.getInstance(drive, baseFolder);
+
+    // Format year and month
+    const year = journeyDate.getFullYear().toString();
+    const month = (journeyDate.getMonth() + 1).toString().padStart(2, '0');
+
     // Get or create folder structure
-    const folders = await ensureFolderStructure(drive, journeyDate, journeyId, mimeType);
-    logger.debug('Created/retrieved folder structure', { folders });
+    const folders = await folderManager.ensureFolderStructure(year, month, journeyId);
+    logger.debug('Retrieved folder structure', { folders });
     
-    // Construct folder link
+    // Determine media type and target folder
     const mediaType = mimeType.includes('image') ? 'image' : 'video';
-    const folderId = folders.mediaTypeId;
-    const folderLink = `https://drive.google.com/drive/folders/${folderId}`;
-    logger.info('Media folder link', { mediaType, folderId, folderLink });
+    const targetFolderId = mediaType === 'image' ? folders.imagesId : folders.videosId;
+    const folderLink = `https://drive.google.com/drive/folders/${targetFolderId}`;
 
     // Generate secure filename
     const locationPart = `${location.town}-${location.country}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -99,7 +104,7 @@ export async function uploadToGoogleDrive({
       requestBody: {
         name: secureFileName,
         mimeType: mimeType,
-        parents: [folders.mediaTypeId],
+        parents: [targetFolderId],
         properties: {
           journeyId: journeyId,
           uploadDate: new Date().toISOString(),
@@ -141,9 +146,9 @@ export async function uploadToGoogleDrive({
         success: true as const,
         fileId: response.data.id,
         webViewLink: fileData.data.webViewLink,
-        path: `${journeyDate.getFullYear()}/${(journeyDate.getMonth() + 1).toString().padStart(2, '0')}/${journeyId}/${mediaType === 'image' ? 'images' : 'videos'}/${secureFileName}`,
+        path: `${year}/${month}/${journeyId}/${mediaType === 'image' ? 'images' : 'videos'}/${secureFileName}`,
         mediaType: mediaType as 'image' | 'video',
-        folderId,
+        folderId: targetFolderId,
         folderLink
       };
 
@@ -165,74 +170,4 @@ export async function uploadToGoogleDrive({
       error: error instanceof Error ? error.message : 'Failed to upload file',
     };
   }
-}
-
-async function ensureFolderStructure(
-  drive: drive_v3.Drive,
-  journeyDate: Date,
-  journeyId: string,
-  mimeType: string
-): Promise<FolderStructure> {
-  const baseFolder = process.env.GOOGLE_DRIVE_BASE_FOLDER_ID;
-  if (!baseFolder) {
-    throw new Error('Base folder ID not configured');
-  }
-
-  const year = journeyDate.getFullYear().toString();
-  const month = (journeyDate.getMonth() + 1).toString().padStart(2, '0');
-  
-  // Create or get year folder
-  const yearFolder = await getOrCreateFolder(drive, year, baseFolder);
-  
-  // Create or get month folder
-  const monthFolder = await getOrCreateFolder(drive, month, yearFolder);
-  
-  // Create or get journey folder
-  const journeyFolder = await getOrCreateFolder(drive, journeyId, monthFolder);
-  
-  // Create or get media type folders
-  const mediaTypeFolder = await getOrCreateFolder(
-    drive,
-    mimeType.includes('image') ? 'images' : 'videos',
-    journeyFolder
-  );
-
-  return {
-    yearId: yearFolder,
-    monthId: monthFolder,
-    journeyId: journeyFolder,
-    mediaTypeId: mediaTypeFolder
-  };
-}
-
-async function getOrCreateFolder(
-  drive: drive_v3.Drive,
-  folderName: string,
-  parentId: string
-): Promise<string> {
-  // Check if folder exists
-  const query = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and '${parentId}' in parents and trashed=false`;
-  const response = await drive.files.list({
-    q: query,
-    fields: 'files(id, name)',
-    spaces: 'drive',
-  });
-
-  if (response.data.files && response.data.files.length > 0) {
-    return response.data.files[0].id!;
-  }
-
-  // Create folder if it doesn't exist
-  const folderMetadata = {
-    name: folderName,
-    mimeType: 'application/vnd.google-apps.folder',
-    parents: [parentId],
-  };
-
-  const folder = await drive.files.create({
-    requestBody: folderMetadata,
-    fields: 'id',
-  });
-
-  return folder.data.id!;
 } 
