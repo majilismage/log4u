@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { format } from "date-fns"
-import { CalendarIcon, ChevronLeft, ChevronRight, ImageIcon, Upload } from "lucide-react"
+import { CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator"
 import { generateMockJourneyData } from "@/lib/mockDataGenerator"
 import { useLoading } from "@/lib/LoadingContext"
 import { FilePreview } from "@/components/FilePreview"
+import { MediaGallery } from "@/components/MediaGallery"
 
 interface TravelEntry {
   id: string
@@ -50,11 +51,8 @@ export default function TravelLog() {
   const [maxSpeed, setMaxSpeed] = useState("")
   const [notes, setNotes] = useState("")
   const [entries, setEntries] = useState<TravelEntry[]>([])
-  const [images, setImages] = useState<string[]>([])
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [showAllImages, setShowAllImages] = useState(false)
-  const { setLoading, setProgress } = useLoading()
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const { setLoading, setProgress } = useLoading()
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -134,10 +132,6 @@ export default function TravelLog() {
         successfulUploads: successfulUploads.length,
         failedUploads: totalFiles - successfulUploads.length
       });
-      
-      if (successfulUploads.length > 0) {
-        setImages(prev => [...prev, ...successfulUploads.map(upload => upload.url)]);
-      }
 
       setLoading(false);
     }
@@ -337,7 +331,6 @@ export default function TravelLog() {
       setAvgSpeed("");
       setMaxSpeed("");
       setNotes("");
-      setImages([]);
       setSelectedFiles([]);
 
     } catch (error) {
@@ -347,30 +340,6 @@ export default function TravelLog() {
       setLoading(false);
     }
   };
-
-  const nextImage = () => {
-    setCurrentImageIndex((prevIndex) => (prevIndex === images.length - 1 ? 0 : prevIndex + 1))
-  }
-
-  const prevImage = () => {
-    setCurrentImageIndex((prevIndex) => (prevIndex === 0 ? images.length - 1 : prevIndex - 1))
-  }
-
-  // Group entries by month and year
-  const groupedEntries = entries.reduce(
-    (groups, entry) => {
-      const dateKey = format(entry.departureDate, "MMMM yyyy")
-      if (!groups[dateKey]) {
-        groups[dateKey] = []
-      }
-      groups[dateKey].push(entry)
-      return groups
-    },
-    {} as Record<string, TravelEntry[]>,
-  )
-
-  // Get recent images (last 10)
-  const recentImages = entries.flatMap((entry) => entry.images).slice(0, 10)
 
   const handleGenerateData = () => {
     const mockData = generateMockJourneyData();
@@ -637,81 +606,7 @@ export default function TravelLog() {
         </TabsContent>
 
         <TabsContent value="gallery" className="mt-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium">Recent Images</h3>
-                  <Button variant="ghost" onClick={() => setShowAllImages(!showAllImages)}>
-                    {showAllImages ? "Show Recent" : "Show All"}
-                  </Button>
-                </div>
-
-                {(showAllImages ? entries.flatMap((entry) => entry.images) : recentImages).length > 0 ? (
-                  <div className="relative">
-                    <div className="overflow-hidden rounded-md aspect-video bg-muted">
-                      {(showAllImages ? entries.flatMap((entry) => entry.images) : recentImages).length > 0 && (
-                        <img
-                          src={
-                            (showAllImages ? entries.flatMap((entry) => entry.images) : recentImages)[currentImageIndex]
-                          }
-                          alt="Travel photo"
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-
-                    {(showAllImages ? entries.flatMap((entry) => entry.images) : recentImages).length > 1 && (
-                      <div className="absolute inset-0 flex items-center justify-between p-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={prevImage}
-                          className="rounded-full bg-background/80 backdrop-blur-sm"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={nextImage}
-                          className="rounded-full bg-background/80 backdrop-blur-sm"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-[300px] bg-muted rounded-md">
-                    <ImageIcon className="h-12 w-12 text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">No images uploaded yet</p>
-                  </div>
-                )}
-
-                {(showAllImages ? entries.flatMap((entry) => entry.images) : recentImages).length > 0 && (
-                  <div className="flex overflow-x-auto gap-2 py-2">
-                    {(showAllImages ? entries.flatMap((entry) => entry.images) : recentImages).map((img, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentImageIndex(index)}
-                        className={cn(
-                          "flex-shrink-0 w-16 h-16 rounded overflow-hidden border-2",
-                          currentImageIndex === index ? "border-primary" : "border-transparent",
-                        )}
-                      >
-                        <img
-                          src={img || "/placeholder.svg"}
-                          alt={`Thumbnail ${index}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <MediaGallery />
         </TabsContent>
 
         <TabsContent value="history" className="mt-6">
@@ -719,53 +614,46 @@ export default function TravelLog() {
             <CardContent className="pt-6">
               {entries.length > 0 ? (
                 <ScrollArea className="h-[500px] pr-4">
-                  {Object.entries(groupedEntries).map(([monthYear, monthEntries]) => (
-                    <div key={monthYear} className="mb-6">
-                      <h3 className="text-lg font-medium mb-2">{monthYear}</h3>
-                      <div className="space-y-4">
-                        {monthEntries.map((entry) => (
-                          <div key={entry.id} className="p-4 border rounded-md">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h4 className="font-medium">
-                                  {entry.from} → {entry.to}
-                                </h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {format(entry.departureDate, "MMM d, yyyy")} -{" "}
-                                  {format(entry.arrivalDate, "MMM d, yyyy")}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm">{entry.distance} miles</p>
-                                <p className="text-sm text-muted-foreground">
-                                  Avg: {entry.avgSpeed} knots • Max: {entry.maxSpeed} knots
-                                </p>
-                              </div>
-                            </div>
-
-                            {entry.notes && (
-                              <>
-                                <Separator className="my-2" />
-                                <p className="text-sm">{entry.notes}</p>
-                              </>
-                            )}
-
-                            {entry.images.length > 0 && (
-                              <div className="mt-2 flex gap-2 overflow-x-auto py-2">
-                                {entry.images.map((img, index) => (
-                                  <div key={index} className="flex-shrink-0 w-16 h-16 rounded overflow-hidden">
-                                    <img
-                                      src={img || "/placeholder.svg"}
-                                      alt={`Entry image ${index}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                  {entries.map((entry) => (
+                    <div key={entry.id} className="p-4 border rounded-md">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="font-medium">
+                            {entry.from} → {entry.to}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {format(entry.departureDate, "MMM d, yyyy")} -{" "}
+                            {format(entry.arrivalDate, "MMM d, yyyy")}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">{entry.distance} miles</p>
+                          <p className="text-sm text-muted-foreground">
+                            Avg: {entry.avgSpeed} knots • Max: {entry.maxSpeed} knots
+                          </p>
+                        </div>
                       </div>
+
+                      {entry.notes && (
+                        <>
+                          <Separator className="my-2" />
+                          <p className="text-sm">{entry.notes}</p>
+                        </>
+                      )}
+
+                      {entry.images.length > 0 && (
+                        <div className="mt-2 flex gap-2 overflow-x-auto py-2">
+                          {entry.images.map((img, index) => (
+                            <div key={index} className="flex-shrink-0 w-16 h-16 rounded overflow-hidden">
+                              <img
+                                src={img || "/placeholder.svg"}
+                                alt={`Entry image ${index}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </ScrollArea>
