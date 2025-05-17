@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 interface LoadingState {
   isLoading: boolean;
@@ -23,24 +23,30 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
     progress: undefined,
   });
 
-  const setLoading = (state: boolean, message: string = '') => {
+  const setLoading = useCallback((state: boolean, message: string = '') => {
     setLoadingState(prev => ({
       ...prev,
       isLoading: state,
       message: message,
       progress: state ? prev.progress : undefined,
     }));
-  };
+  }, [setLoadingState]);
 
-  const setProgress = (progress: number) => {
+  const setProgress = useCallback((progress: number) => {
     setLoadingState(prev => ({
       ...prev,
       progress,
     }));
-  };
+  }, [setLoadingState]);
+
+  const contextValue = useMemo(() => ({
+    loadingState,
+    setLoading,
+    setProgress,
+  }), [loadingState, setLoading, setProgress]);
 
   return (
-    <LoadingContext.Provider value={{ loadingState, setLoading, setProgress }}>
+    <LoadingContext.Provider value={contextValue}>
       {children}
     </LoadingContext.Provider>
   );

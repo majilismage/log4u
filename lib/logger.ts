@@ -1,22 +1,12 @@
-import fs from 'fs';
-import path from 'path';
-import { format } from 'date-fns';
-
 class Logger {
-  private logFile: string;
+  private isServer: boolean;
 
   constructor() {
-    const logDir = path.join(process.cwd(), 'logs');
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-    
-    const date = format(new Date(), 'yyyy-MM-dd');
-    this.logFile = path.join(logDir, `app-${date}.log`);
+    this.isServer = typeof window === 'undefined';
   }
 
-  private write(level: string, message: string, data?: any) {
-    const timestamp = format(new Date(), 'yyyy-MM-dd HH:mm:ss.SSS');
+  private async write(level: string, message: string, data?: any) {
+    const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
       level,
@@ -24,8 +14,34 @@ class Logger {
       data: data || null
     };
 
-    const logLine = JSON.stringify(logEntry) + '\n';
-    fs.appendFileSync(this.logFile, logLine);
+    if (this.isServer) {
+      // Server-side logging
+      const { writeFile, mkdir } = await import('fs/promises');
+      const { join } = await import('path');
+      const { format } = await import('date-fns');
+      
+      try {
+        const logDir = join(process.cwd(), 'logs');
+        await mkdir(logDir, { recursive: true });
+        
+        const date = format(new Date(), 'yyyy-MM-dd');
+        const logFile = join(logDir, `app-${date}.log`);
+        
+        const logLine = JSON.stringify(logEntry) + '\n';
+        await writeFile(logFile, logLine, { flag: 'a' });
+      } catch (error) {
+        console.error('Failed to write to log file:', error);
+        console.log(JSON.stringify(logEntry));
+      }
+    } else {
+      // Client-side logging
+      const logMethod = level.toLowerCase() === 'error' ? 'error' 
+        : level.toLowerCase() === 'warn' ? 'warn'
+        : level.toLowerCase() === 'debug' ? 'debug'
+        : 'info';
+      
+      console[logMethod](`[${timestamp}] ${level}: ${message}`, data || '');
+    }
   }
 
   info(message: string, data?: any) {
