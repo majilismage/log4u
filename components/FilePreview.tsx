@@ -3,6 +3,7 @@
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
+import { isImageType, isVideoType } from "@/lib/mediaUtils"
 
 interface FilePreviewProps {
   files: File[]
@@ -15,13 +16,26 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
       {files.map((file, index) => (
         <div key={index} className="relative group">
           <div className="aspect-square rounded-lg border bg-muted">
-            {file.type.startsWith('image/') ? (
+            {isImageType(file.type) ? (
               <div className="relative w-full h-full">
                 <Image
                   src={URL.createObjectURL(file)}
                   alt={file.name}
                   fill
                   className="object-cover rounded-lg"
+                />
+              </div>
+            ) : isVideoType(file.type) ? (
+              <div className="relative w-full h-full">
+                <video
+                  src={URL.createObjectURL(file)}
+                  className="w-full h-full object-cover rounded-lg"
+                  controls={false}
+                  muted
+                  loop
+                  playsInline
+                  onMouseEnter={(e) => e.currentTarget.play()}
+                  onMouseLeave={(e) => e.currentTarget.pause()}
                 />
               </div>
             ) : (

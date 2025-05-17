@@ -1,9 +1,8 @@
 # Travel Log Project Status
 
 ## To Do Next
-- Change naming of Drive directory structure
 - Show state in UI
-- Add media link to Google Sheet
+- Add video link to Google Sheet
 - Add error toast notifications for better user feedback
 - Add loading states for individual form fields during API calls
 - Implement proper error handling for file upload failures
@@ -32,7 +31,7 @@
 - Delayed upload until form submission
 - Progress tracking during upload
 - Proper error handling and logging
-- Organized file storage in Google Drive
+- Organized file storage in Google Drive with structured directory naming (year/month/journeyId/mediaType/filename)
 
 ### Google Sheets Integration
 - Service account authentication
@@ -42,7 +41,7 @@
   - Location details (town, country, coordinates)
   - Journey metrics (distance, speeds)
   - Timestamps for record keeping
-  - Media links from Google Drive
+- Media folder links (images for now) from Google Drive are reliably saved to Google Sheets with each record
 
 ## Planned Features
 
@@ -122,5 +121,6 @@ Current columns:
 - Average Speed
 - Max Speed
 - Notes
-- Media Links
+- Images Link
+- Videos Link
 - Timestamp 

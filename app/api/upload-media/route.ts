@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { uploadToGoogleDrive } from '@/lib/googleDrive';
 import { logger } from '@/lib/logger';
+import { isValidMediaType, MAX_FILE_SIZE } from '@/lib/mediaUtils';
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +32,24 @@ export async function POST(request: Request) {
       logger.error('No file provided in request');
       return NextResponse.json(
         { error: 'No file provided' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file type
+    if (!isValidMediaType(file.type)) {
+      logger.error('Invalid file type', { type: file.type });
+      return NextResponse.json(
+        { error: 'Invalid file type. Only images and videos are allowed.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      logger.error('File too large', { size: file.size, maxSize: MAX_FILE_SIZE });
+      return NextResponse.json(
+        { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
         { status: 400 }
       );
     }
@@ -92,7 +111,8 @@ export async function POST(request: Request) {
       fileId: result.fileId,
       webViewLink: result.webViewLink,
       path: result.path,
-      folderLink: result.folderLink
+      folderLink: result.folderLink,
+      mediaType: result.mediaType
     });
   } catch (error) {
     logger.error('Unexpected error during upload', error);
