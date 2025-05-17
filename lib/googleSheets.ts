@@ -31,7 +31,6 @@ interface TravelLogEntry {
 }
 
 export async function saveToGoogleSheets(entry: TravelLogEntry) {
-  logger.error('DEBUG: Entered saveToGoogleSheets', { entry, typeofImageLinks: typeof entry.imageLinks, imageLinks: entry.imageLinks });
   try {
     // Validate required fields
     if (!entry.journeyId) {
@@ -44,8 +43,8 @@ export async function saveToGoogleSheets(entry: TravelLogEntry) {
       mediaInfo: {
         hasImages: !!entry.imageLinks,
         hasVideos: !!entry.videoLinks,
-        imageLinksLength: typeof entry.imageLinks === 'string' ? entry.imageLinks.length : 0,
-        videoLinksLength: typeof entry.videoLinks === 'string' ? entry.videoLinks.length : 0
+        imageLinksType: typeof entry.imageLinks,
+        videoLinksType: typeof entry.videoLinks
       }
     });
     
@@ -70,51 +69,52 @@ export async function saveToGoogleSheets(entry: TravelLogEntry) {
     // Get the first sheet
     const sheet = doc.sheetsByIndex[0];
     logger.debug('Accessed sheet', { sheetTitle: sheet.title });
-    await sheet.loadHeaderRow();
+    
+    try {
+      await sheet.loadHeaderRow();
+    } catch (error) {
+      logger.error('Failed to load sheet headers', { error });
+      throw new Error('Failed to load sheet headers: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
 
     // Check for required columns and log if missing
     const requiredColumns = ['Images Link', 'Videos Link'];
     const sheetHeaders = sheet.headerValues || [];
-    for (const col of requiredColumns) {
-      if (!sheetHeaders.includes(col)) {
-        logger.error('Google Sheets column missing', { column: col, availableColumns: sheetHeaders });
-      }
+    const missingColumns = requiredColumns.filter(col => !sheetHeaders.includes(col));
+    if (missingColumns.length > 0) {
+      logger.error('Missing required columns in sheet', { missingColumns, availableColumns: sheetHeaders });
+      throw new Error(`Missing required columns: ${missingColumns.join(', ')}`);
     }
-
-    // Debug: log the raw value and type before parsing
-    logger.debug('Raw imageLinks value', { value: entry.imageLinks, type: typeof entry.imageLinks });
-    logger.debug('Raw videoLinks value', { value: entry.videoLinks, type: typeof entry.videoLinks });
 
     // Parse and validate media links
     let parsedImageLinks = '';
     let parsedVideoLinks = '';
     
-    // Only one of these branches should run for each field
     if (entry.imageLinks && typeof entry.imageLinks === 'string' && entry.imageLinks.startsWith('https://drive.google.com/drive/folders/')) {
-      logger.debug('Branch: imageLinks is a folder link');
       parsedImageLinks = entry.imageLinks;
-      logger.info('Saving image folder link to sheet', { imageFolderLink: parsedImageLinks });
+      logger.info('Using image folder link', { imageFolderLink: parsedImageLinks });
     } else if (entry.imageLinks) {
-      logger.debug('Branch: imageLinks is being parsed as JSON');
       try {
         const links = JSON.parse(entry.imageLinks);
         parsedImageLinks = Array.isArray(links) ? JSON.stringify(links) : '';
+        logger.debug('Parsed image links from JSON', { parsedLinks: parsedImageLinks });
       } catch (e) {
         logger.error('Failed to parse image links', { error: e, value: entry.imageLinks });
+        throw new Error('Invalid image links format');
       }
     }
 
     if (entry.videoLinks && typeof entry.videoLinks === 'string' && entry.videoLinks.startsWith('https://drive.google.com/drive/folders/')) {
-      logger.debug('Branch: videoLinks is a folder link');
       parsedVideoLinks = entry.videoLinks;
-      logger.info('Saving video folder link to sheet', { videoFolderLink: parsedVideoLinks });
+      logger.info('Using video folder link', { videoFolderLink: parsedVideoLinks });
     } else if (entry.videoLinks) {
-      logger.debug('Branch: videoLinks is being parsed as JSON');
       try {
         const links = JSON.parse(entry.videoLinks);
         parsedVideoLinks = Array.isArray(links) ? JSON.stringify(links) : '';
+        logger.debug('Parsed video links from JSON', { parsedLinks: parsedVideoLinks });
       } catch (e) {
         logger.error('Failed to parse video links', { error: e, value: entry.videoLinks });
+        throw new Error('Invalid video links format');
       }
     }
 
