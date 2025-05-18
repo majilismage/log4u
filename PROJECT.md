@@ -58,7 +58,32 @@
   - Timestamps for record keeping
 - Media folder links (images for now) from Google Drive are reliably saved to Google Sheets with each record
 
+### History Page (Phase 1 Foundation)
+- Fetches and displays journey history within the existing "History" tab.
+- **Responsive Journey Cards:**
+  - Each journey entry is displayed in a card with a responsive layout (two-column on desktop, single-column on mobile).
+  - Dark mode support for all new history components.
+- **Journey Metadata Display:**
+  - Shows "From: {Town} ({Country}) -> To: {Town} ({Country})".
+  - Displays formatted Departure and Arrival dates (e.g., "July 20, 2024").
+  - Shows Distance, Average Speed, and Max Speed with icons.
+  - Uses icons for locations, dates, and travel stats, matching the desired modern UI.
+- **Journey Content Display:**
+  - Displays journey notes within the card.
+- **Loading and States:**
+  - Implements loading state with a spinner consistent with other app areas (e.g., Gallery).
+  - Handles error states if data fetching fails.
+  - Displays a "No history entries found" message when applicable.
+
 ## Planned Features
+
+### Enhanced History View
+- **Interactive Journey Display:**
+  - Minimap plotting start/end points with a connecting arrow.
+- **Supporting API Endpoints:**
+  - API for updating notes in Google Sheets.
+  - APIs for deleting and adding media to Google Drive and updating Google Sheets.
+  - Refined `/api/history` to provide detailed data for each journey, including individual media item details.
 
 ### Location Auto-Complete
 - Integration with OpenStreetMap's Nominatim API
