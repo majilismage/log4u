@@ -2,9 +2,9 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -20,6 +20,12 @@ import { generateMockJourneyData } from "@/lib/mockDataGenerator"
 import { useLoading } from "@/lib/LoadingContext"
 import { FilePreview } from "@/components/FilePreview"
 import { MediaGallery } from "@/components/MediaGallery"
+import HistoryEntryCard from "@/components/history/HistoryEntryCard"
+import type { JourneyEntry } from "@/types/journey"
+
+interface TravelLogEntryFromSheet {
+  [key: string]: any; // Define a more specific type based on your sheet columns if possible
+}
 
 interface TravelEntry {
   id: string
@@ -33,6 +39,31 @@ interface TravelEntry {
   notes: string
   images: string[]
 }
+
+// Transformation function
+const transformSheetEntryToJourneyEntry = (sheetEntry: TravelLogEntryFromSheet): JourneyEntry => {
+  // Prefer specific 'journeyId' if available, then 'Journey ID', then fallbacks
+  const id = sheetEntry["journeyId"] || sheetEntry["Journey ID"] || sheetEntry["id"] || `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Helper to safely convert to string, providing a default if null/undefined
+  const safeString = (value: any, defaultValue = ""): string => {
+    return value !== null && value !== undefined ? String(value) : defaultValue;
+  };
+
+  return {
+    id: safeString(id),
+    fromTown: safeString(sheetEntry["From Town"] || sheetEntry["fromTown"]), // Check for common variations
+    fromCountry: safeString(sheetEntry["From Country"] || sheetEntry["fromCountry"]),
+    toTown: safeString(sheetEntry["To Town"] || sheetEntry["toTown"]),
+    toCountry: safeString(sheetEntry["To Country"] || sheetEntry["toCountry"]),
+    departureDate: safeString(sheetEntry["Departure Date"] || sheetEntry["departureDate"]), // Dates as strings
+    arrivalDate: safeString(sheetEntry["Arrival Date"] || sheetEntry["arrivalDate"]),
+    distance: safeString(sheetEntry["Distance"] || sheetEntry["distance"]), 
+    averageSpeed: safeString(sheetEntry["Average Speed"] || sheetEntry["averageSpeed"]),
+    maxSpeed: safeString(sheetEntry["Max Speed"] || sheetEntry["maxSpeed"]),
+    notes: safeString(sheetEntry["Notes"] || sheetEntry["notes"]), 
+  };
+};
 
 export default function TravelLog() {
   const [departureDate, setDepartureDate] = useState<Date>(new Date())
@@ -53,6 +84,13 @@ export default function TravelLog() {
   const [entries, setEntries] = useState<TravelEntry[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const { setLoading, setProgress } = useLoading()
+
+  // State for History tab
+  const [activeTab, setActiveTab] = useState("new-entry")
+  const [historyData, setHistoryData] = useState<TravelLogEntryFromSheet[]>([])
+  const [historyRecordCount, setHistoryRecordCount] = useState<number>(0)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(false)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -260,22 +298,48 @@ export default function TravelLog() {
 
   const handleGenerateData = () => {
     const mockData = generateMockJourneyData();
-    setDepartureDate(new Date(mockData.departureDate));
-    setArrivalDate(new Date(mockData.arrivalDate));
-    setJourneyId(mockData.journeyId);
-    setFromTown(mockData.fromTown);
-    setFromCountry(mockData.fromCountry);
-    setFromLat(mockData.fromLat.toString());
-    setFromLng(mockData.fromLng.toString());
-    setToTown(mockData.toTown);
-    setToCountry(mockData.toCountry);
-    setToLat(mockData.toLat.toString());
-    setToLng(mockData.toLng.toString());
-    setDistance(mockData.distance);
-    setAvgSpeed(mockData.avgSpeed);
-    setMaxSpeed(mockData.maxSpeed);
-    setNotes(mockData.notes);
+    setDepartureDate(mockData.departureDate ? new Date(mockData.departureDate) : new Date());
+    setArrivalDate(mockData.arrivalDate ? new Date(mockData.arrivalDate) : new Date());
+    setJourneyId(mockData.journeyId || `J${Date.now()}`);
+    setFromTown(mockData.fromTown || "");
+    setFromCountry(mockData.fromCountry || "");
+    setFromLat(mockData.fromLat?.toString() || "");
+    setFromLng(mockData.fromLng?.toString() || "");
+    setToTown(mockData.toTown || "");
+    setToCountry(mockData.toCountry || "");
+    setToLat(mockData.toLat?.toString() || "");
+    setToLng(mockData.toLng?.toString() || "");
+    setDistance(mockData.distance?.toString() || "");
+    setAvgSpeed(mockData.avgSpeed?.toString() || "");
+    setMaxSpeed(mockData.maxSpeed?.toString() || "");
+    setNotes(mockData.notes || "");
   };
+
+  // Function to fetch history data
+  const fetchHistoryData = async () => {
+    setIsHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await fetch('/api/history');
+      const result = await response.json();
+      if (result.success) {
+        setHistoryData(result.data);
+        setHistoryRecordCount(result.recordCount);
+      } else {
+        setHistoryError(result.error || 'Failed to fetch history data.');
+      }
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'An unknown error occurred.');
+    }
+    setIsHistoryLoading(false);
+  };
+
+  // Effect to load history data when history tab is active
+  useEffect(() => {
+    if (activeTab === "history") {
+      fetchHistoryData();
+    }
+  }, [activeTab]);
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
@@ -293,14 +357,14 @@ export default function TravelLog() {
         )}
       </div>
 
-      <Tabs defaultValue="form" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="form">New Entry</TabsTrigger>
+          <TabsTrigger value="new-entry">New Entry</TabsTrigger>
           <TabsTrigger value="gallery">Gallery</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="form" className="mt-6">
+        <TabsContent value="new-entry" className="mt-6">
           <Card>
             <CardContent className="pt-6">
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -527,60 +591,41 @@ export default function TravelLog() {
         </TabsContent>
 
         <TabsContent value="history" className="mt-6">
-          <Card>
-            <CardContent className="pt-6">
-              {entries.length > 0 ? (
-                <ScrollArea className="h-[500px] pr-4">
-                  {entries.map((entry) => (
-                    <div key={entry.id} className="p-4 border rounded-md">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-medium">
-                            {entry.from} → {entry.to}
-                          </h4>
-                          <p className="text-sm text-muted-foreground">
-                            {format(entry.departureDate, "MMM d, yyyy")} -{" "}
-                            {format(entry.arrivalDate, "MMM d, yyyy")}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm">{entry.distance} miles</p>
-                          <p className="text-sm text-muted-foreground">
-                            Avg: {entry.avgSpeed} knots • Max: {entry.maxSpeed} knots
-                          </p>
-                        </div>
-                      </div>
-
-                      {entry.notes && (
-                        <>
-                          <Separator className="my-2" />
-                          <p className="text-sm">{entry.notes}</p>
-                        </>
-                      )}
-
-                      {entry.images.length > 0 && (
-                        <div className="mt-2 flex gap-2 overflow-x-auto py-2">
-                          {entry.images.map((img, index) => (
-                            <div key={index} className="flex-shrink-0 w-16 h-16 rounded overflow-hidden">
-                              <img
-                                src={img || "/placeholder.svg"}
-                                alt={`Entry image ${index}`}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </ScrollArea>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-[300px]">
-                  <p className="text-muted-foreground">No travel entries yet</p>
-                  <Button variant="link" onClick={() => (document.querySelector('[data-value="form"]') as HTMLElement)?.click()}>
-                    Create your first entry
-                  </Button>
+          <Card className="dark:bg-neutral-800 border-slate-200 dark:border-neutral-700">
+            <CardContent className="space-y-4 p-4 md:p-6 min-h-[300px]">
+              <h2 className="text-2xl font-semibold text-slate-800 dark:text-neutral-100">Travel History</h2>
+              
+              {isHistoryLoading && (
+                <div className="flex flex-col items-center justify-center h-full py-10 text-slate-500 dark:text-neutral-400">
+                  <Loader2 className="h-12 w-12 mb-4 animate-spin text-sky-500 dark:text-sky-400" />
+                  <p>Loading history...</p>
                 </div>
+              )}
+              {historyError && (
+                <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-3 rounded-md" role="alert">
+                  <strong className="font-bold">Error:</strong>
+                  <span className="block sm:inline"> {historyError}</span>
+                </div>
+              )}
+
+              {!isHistoryLoading && !historyError && (
+                historyData.length > 0 ? (
+                  <div className="space-y-6">
+                    {historyData.map((entry, index) => {
+                      const journey = transformSheetEntryToJourneyEntry(entry);
+                      const uniqueKey = journey.id && journey.id !== "" && journey.id !== "undefined" ? journey.id : `journey-${index}`;
+                      return <HistoryEntryCard key={uniqueKey} journey={journey} />;
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-400 dark:text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M3.75 3h16.5M3.75 12h16.5m-16.5 3.75h16.5M3.75 6.75h16.5m-16.5 9.75h16.5" /> 
+                    </svg>
+                    <p className="mt-2 text-lg font-semibold text-slate-600 dark:text-neutral-300">No history records found.</p>
+                    <p className="text-sm text-slate-500 dark:text-neutral-400">Looks like you haven't logged any journeys yet or there was an issue fetching them.</p>
+                  </div>
+                )
               )}
             </CardContent>
           </Card>
