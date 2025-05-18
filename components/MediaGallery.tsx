@@ -190,19 +190,6 @@ export function MediaGallery() {
   const totalMediaFileCount = Object.values(mediaFiles).reduce((acc, files) => acc + files.length, 0);
   console.log('MediaGallery: Calculated totalMediaFileCount:', totalMediaFileCount);
 
-  const getItemIcon = (mimeType: string) => {
-    if (mimeType.startsWith('image/')) {
-      return <Image className="h-6 w-6" />
-    }
-    if (mimeType.startsWith('video/')) {
-      return <Video className="h-6 w-6" />
-    }
-    if (mimeType === 'application/vnd.google-apps.folder') {
-      return <Folder className="h-6 w-6" />
-    }
-    return <FileIcon className="h-6 w-6" />
-  }
-
   console.log('MediaGallery: Rendering - isLoading:', isLoading, 'totalMediaFileCount:', totalMediaFileCount, 'error:', error);
 
   if (error) {
