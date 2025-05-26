@@ -26,6 +26,19 @@ interface HistoryEntryCardProps {
 }
 
 const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({ journey }) => {
+  // Log the received journey object
+  console.log('[HistoryEntryCard] Received journey prop:', journey);
+  console.log('[HistoryEntryCard] Coordinates in journey prop:', {
+    fromLatitude: journey.fromLatitude,
+    fromLongitude: journey.fromLongitude,
+    toLatitude: journey.toLatitude,
+    toLongitude: journey.toLongitude,
+    typeFromLat: typeof journey.fromLatitude,
+    typeFromLng: typeof journey.fromLongitude,
+    typeToLat: typeof journey.toLatitude,
+    typeToLng: typeof journey.toLongitude,
+  });
+
   return (
     <div className="bg-white dark:bg-neutral-800 shadow-lg dark:shadow-neutral-900/50 rounded-xl overflow-hidden border border-slate-200 dark:border-neutral-700 transition-shadow duration-300 ease-in-out">
       {/* Flex container: column on mobile, row on medium screens and up */}
@@ -43,6 +56,10 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({ journey }) => {
             distance={journey.distance}
             averageSpeed={journey.averageSpeed}
             maxSpeed={journey.maxSpeed}
+            fromLatitude={journey.fromLatitude}
+            fromLongitude={journey.fromLongitude}
+            toLatitude={journey.toLatitude}
+            toLongitude={journey.toLongitude}
           />
         </div>
 
