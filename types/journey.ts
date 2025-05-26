@@ -10,6 +10,11 @@ export interface JourneyEntry {
   averageSpeed: string;  // e.g., "50 km/h"
   maxSpeed: string;      // e.g., "80 km/h"
   notes?: string;
+  // Coordinates for the journey start and end points
+  fromLatitude?: number;
+  fromLongitude?: number;
+  toLatitude?: number;
+  toLongitude?: number;
   // Optional fields for future phases, not used in Phase 1 UI directly by these components yet
   // startLat?: number;
   // startLng?: number;
