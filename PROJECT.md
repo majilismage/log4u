@@ -149,7 +149,10 @@ GOOGLE_DRIVE_CLIENT_EMAIL="your-service-account-email"
 ```
 
 ## Google Sheet Structure
-Current columns:
+Column headers used in the Google Sheet:
+`Journey ID	Departure Date	Arrival Date	From Town	From Country	From Latitude	From Longitude	To Town	To Country	To Latitude	To Longitude	Distance	Average Speed	Max Speed	Notes	Images Link	Videos Link	Timestamp`
+
+Original list of columns (for reference, ensure the list above is the source of truth for headers):
 - Departure Date
 - Arrival Date
 - From Town

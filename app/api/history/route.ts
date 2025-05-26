@@ -64,15 +64,43 @@ export async function GET() {
     // Transform rows into a plain array of objects
     // Each object's keys will be the header names from the sheet
     const data = rows.map(row => {
-      const rowData: TravelLogEntry = {} as TravelLogEntry;
-      // sheet.headerValues contains the actual header names from the sheet
-      sheet.headerValues.forEach(header => {
-        rowData[header] = row.get(header);
-      });
-      return rowData;
+      // Log all headers and their raw values for the first row for detailed inspection
+      if (rows.indexOf(row) === 0) { 
+        logger.debug("API Route: Raw headers and values from sheet (first row only):");
+        sheet.headerValues.forEach(header => {
+          logger.debug(`Header: '${header}', Raw Value: '${row.get(header)}'`, { header, value: row.get(header) });
+        });
+      }
+
+      // Directly construct the object to be returned
+      const journeyObject = {
+        id: row.get('Journey ID') || undefined,
+        fromTown: row.get('From Town') || undefined,
+        fromCountry: row.get('From Country') || undefined,
+        fromLatitude: row.get('From Latitude') ? parseFloat(row.get('From Latitude')) : undefined,
+        fromLongitude: row.get('From Longitude') ? parseFloat(row.get('From Longitude')) : undefined,
+        toTown: row.get('To Town') || undefined,
+        toCountry: row.get('To Country') || undefined,
+        toLatitude: row.get('To Latitude') ? parseFloat(row.get('To Latitude')) : undefined,
+        toLongitude: row.get('To Longitude') ? parseFloat(row.get('To Longitude')) : undefined,
+        departureDate: row.get('Departure Date') || undefined,
+        arrivalDate: row.get('Arrival Date') || undefined,
+        distance: row.get('Distance') || undefined,
+        averageSpeed: row.get('Average Speed') || undefined,
+        maxSpeed: row.get('Max Speed') || undefined,
+        notes: row.get('Notes') || undefined,
+        imagesLink: row.get('Images Link') || undefined,
+        videosLink: row.get('Videos Link') || undefined,
+        timestamp: row.get('Timestamp') || undefined,
+      };
+      
+      logger.debug('API Route: Transformed row data (direct construction)', journeyObject);
+      return journeyObject;
     });
 
     logger.info('API Route: Successfully fetched history data', { recordCount });
+    // Log the entire data array before sending it in the response
+    logger.debug('API Route: Data array being sent to client', data);
 
     return NextResponse.json({
       success: true,
