@@ -1,11 +1,45 @@
-# Travel Log Project Status
+# WanderNote (Travel Log) Project Status
 
-## To Do Next
-- Show state in UI
-- Add video link to Google Sheet
+## Current Architecture & Deployment
+- **Application Name:** WanderNote
+- **Live URL:** https://wandernote.vercel.app/
+- **Platform:** Vercel (with automatic deployments)
+- **Database:** Neon Postgres (Serverless) with environment-specific branches
+- **Authentication:** NextAuth.js with Google OAuth 2.0
+
+## Major Architectural Decisions
+
+### Multi-User Support Implementation (In Progress)
+**Decision:** Transitioned from single-user (developer-only) to multi-user architecture where each user connects their own Google services.
+
+**Approach:** Google OAuth 2.0 with NextAuth.js
+- **Why OAuth 2.0:** More secure and user-friendly than asking users for service account keys
+- **Why NextAuth.js:** Handles OAuth flow, token management, and security best practices automatically
+- **Database:** Neon Postgres to store encrypted user-specific refresh tokens and configuration
+
+**Google Cloud Configuration:**
+- OAuth consent screen configured for external users
+- Required scopes: `spreadsheets`, `drive.file`
+- Authorized redirect URIs: 
+  - Local: `http://localhost:3000/api/auth/callback/google`
+  - Production: `https://wandernote.vercel.app/api/auth/callback/google`
+
+**Database Architecture:**
+- Environment-specific branches (Development/Preview/Production)
+- Stores user sessions, encrypted OAuth refresh tokens, and user configurations
+- Each user's Google API interactions use their own authenticated tokens
+
+## To Do Next (Updated Priorities)
+- **[HIGH PRIORITY]** Complete OAuth 2.0 implementation:
+  - Install and configure NextAuth.js
+  - Create database schema for user sessions and configurations
+  - Implement Google OAuth provider configuration
+  - Create user settings page for Google integration
+  - Modify existing Google API calls to use user-specific tokens
 - Add error toast notifications for better user feedback
 - Add loading states for individual form fields during API calls
 - Implement proper error handling for file upload failures
+- Show state in UI
 
 ## Completed Features
 
@@ -77,6 +111,18 @@
 
 ## Planned Features
 
+### Multi-User Authentication & Configuration
+- **User Authentication:** NextAuth.js with Google OAuth 2.0
+- **User Settings Page:** Interface for users to manage their Google integrations
+- **Per-User Data Isolation:** Each user's travel logs, media, and settings are completely separate
+- **Secure Token Management:** Encrypted storage of user-specific Google API refresh tokens
+
+### Enhanced User Experience
+- **Onboarding Flow:** Guide new users through Google account connection
+- **Account Management:** Allow users to disconnect/reconnect Google services
+- **Data Export:** Users can export their travel log data
+- **Privacy Controls:** Users control their own data and Google permissions
+
 ### Enhanced History View
 - **Interactive Journey Display:**
   - Minimap plotting start/end points with a connecting arrow.
@@ -135,18 +181,52 @@
 - Add periodic cache cleanup for the folder manager
 - Implement folder structure validation and repair utilities
 
-## Environment Setup
-Required environment variables in `.env.local`:
+## Environment Setup (Updated)
+
+### Local Development (`.env.local`):
 ```
-# Google Sheets Configuration
+# NextAuth.js Configuration
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-generated-secret-key
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+
+# Database Configuration (automatically provided by Neon)
+DATABASE_URL=your-neon-database-url
+
+# Legacy (for backward compatibility during transition)
 GOOGLE_SHEETS_PRIVATE_KEY="your-private-key"
 GOOGLE_SHEETS_CLIENT_EMAIL="your-service-account-email"
 GOOGLE_SHEETS_SHEET_ID="your-sheet-id"
-
-# Google Drive Configuration
 GOOGLE_DRIVE_PRIVATE_KEY="your-private-key"
 GOOGLE_DRIVE_CLIENT_EMAIL="your-service-account-email"
 ```
+
+### Vercel Production Environment Variables:
+```
+NEXTAUTH_URL=https://wandernote.vercel.app
+NEXTAUTH_SECRET=your-generated-secret-key
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+DATABASE_URL=automatically-provided-by-neon
+```
+
+## Database Schema (New)
+### User Sessions (NextAuth.js tables):
+- `users` - User profile information
+- `accounts` - OAuth account linking (Google)
+- `sessions` - Active user sessions
+- `verification_tokens` - Email verification tokens
+
+### User Configurations:
+- `user_google_config` - Encrypted Google API tokens and user-specific settings
+  - `user_id` (FK to users table)
+  - `encrypted_refresh_token` (Google OAuth refresh token)
+  - `google_sheets_id` (user's specific Google Sheet ID)
+  - `google_drive_folder_id` (user's specific Drive folder)
+  - `created_at`, `updated_at`
 
 ## Google Sheet Structure
 Column headers used in the Google Sheet:
