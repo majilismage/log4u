@@ -21,6 +21,7 @@ import { FilePreview } from "@/components/FilePreview"
 import { MediaGallery } from "@/components/MediaGallery"
 import HistoryEntryCard from "@/components/history/HistoryEntryCard"
 import type { JourneyEntry } from "@/types/journey"
+import UserMenu from "@/components/auth/UserMenu"
 
 interface TravelEntry {
   id: string
@@ -324,309 +325,309 @@ export default function TravelLog() {
   }, [activeTab]);
 
   return (
-    <div className="container mx-auto py-8 max-w-4xl">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-center flex-grow">Travel Log</h1>
-      </div>
+    <main className="container mx-auto p-4 md:p-6 lg:p-8">
+      <div className="flex w-full flex-col items-center">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-4xl">
+          <div className="flex items-center justify-between">
+            <TabsList className="grid w-full max-w-sm grid-cols-3">
+              <TabsTrigger value="new-entry">New Entry</TabsTrigger>
+              <TabsTrigger value="gallery">Gallery</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+            <UserMenu />
+          </div>
+          <TabsContent value="new-entry" className="mt-6">
+            <Card>
+              <CardContent className="p-6">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="departureDate">Departure Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !departureDate && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {departureDate ? format(departureDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={departureDate}
+                            onSelect={(date) => date && setDepartureDate(date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="new-entry">New Entry</TabsTrigger>
-          <TabsTrigger value="gallery">Gallery</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
-        </TabsList>
+                    <div className="space-y-2">
+                      <Label htmlFor="arrivalDate">Arrival Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !arrivalDate && "text-muted-foreground",
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {arrivalDate ? format(arrivalDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={arrivalDate}
+                            onSelect={(date) => date && setArrivalDate(date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
 
-        <TabsContent value="new-entry" className="mt-6">
-          <Card>
-            <CardContent className="pt-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="departureDate">Departure Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !departureDate && "text-muted-foreground",
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {departureDate ? format(departureDate, "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={departureDate}
-                          onSelect={(date) => date && setDepartureDate(date)}
-                          initialFocus
+                    <div className="space-y-2">
+                      <Label htmlFor="from">From</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          id="fromTown"
+                          value={fromTown}
+                          onChange={(e) => setFromTown(e.target.value)}
+                          placeholder="Town/City"
+                          required
                         />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="arrivalDate">Arrival Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !arrivalDate && "text-muted-foreground",
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {arrivalDate ? format(arrivalDate, "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={arrivalDate}
-                          onSelect={(date) => date && setArrivalDate(date)}
-                          initialFocus
+                        <Input
+                          id="fromCountry"
+                          value={fromCountry}
+                          onChange={(e) => setFromCountry(e.target.value)}
+                          placeholder="Country"
+                          required
                         />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="from">From</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        id="fromTown"
-                        value={fromTown}
-                        onChange={(e) => setFromTown(e.target.value)}
-                        placeholder="Town/City"
-                        required
-                      />
-                      <Input
-                        id="fromCountry"
-                        value={fromCountry}
-                        onChange={(e) => setFromCountry(e.target.value)}
-                        placeholder="Country"
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        id="fromLat"
-                        type="number"
-                        step="any"
-                        value={fromLat}
-                        onChange={(e) => setFromLat(e.target.value)}
-                        placeholder="Latitude"
-                        required
-                      />
-                      <Input
-                        id="fromLng"
-                        type="number"
-                        step="any"
-                        value={fromLng}
-                        onChange={(e) => setFromLng(e.target.value)}
-                        placeholder="Longitude"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="to">To</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        id="toTown"
-                        value={toTown}
-                        onChange={(e) => setToTown(e.target.value)}
-                        placeholder="Town/City"
-                        required
-                      />
-                      <Input
-                        id="toCountry"
-                        value={toCountry}
-                        onChange={(e) => setToCountry(e.target.value)}
-                        placeholder="Country"
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        id="toLat"
-                        type="number"
-                        step="any"
-                        value={toLat}
-                        onChange={(e) => setToLat(e.target.value)}
-                        placeholder="Latitude"
-                        required
-                      />
-                      <Input
-                        id="toLng"
-                        type="number"
-                        step="any"
-                        value={toLng}
-                        onChange={(e) => setToLng(e.target.value)}
-                        placeholder="Longitude"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-span-2 grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="distance">Distance</Label>
-                      <Input
-                        id="distance"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={distance}
-                        onChange={(e) => setDistance(e.target.value)}
-                        placeholder="Distance"
-                        required
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="avgSpeed">Avg Speed (knots)</Label>
-                      <Input
-                        id="avgSpeed"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={avgSpeed}
-                        onChange={(e) => setAvgSpeed(e.target.value)}
-                        placeholder="Avg speed"
-                        required
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="maxSpeed">Max Speed (knots)</Label>
-                      <Input
-                        id="maxSpeed"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={maxSpeed}
-                        onChange={(e) => setMaxSpeed(e.target.value)}
-                        placeholder="Max speed"
-                        required
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Add your travel notes here"
-                    className="min-h-[120px]"
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <Label htmlFor="media">Upload Media (Images & Videos)</Label>
-                  <div className="flex flex-col items-center justify-center w-full">
-                    <label
-                      htmlFor="media"
-                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted/80 transition-colors"
-                    >
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <svg className="w-8 h-8 mb-4 text-muted-foreground" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                          <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
-                        </svg>
-                        <p className="mb-2 text-sm text-muted-foreground">
-                          <span className="font-semibold">Click to upload</span> or drag and drop
-                        </p>
-                        <p className="text-xs text-muted-foreground">Images and videos up to 100MB</p>
                       </div>
-                      <Input
-                        id="media"
-                        type="file"
-                        accept="image/*, video/*"
-                        multiple
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                    </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          id="fromLat"
+                          type="number"
+                          step="any"
+                          value={fromLat}
+                          onChange={(e) => setFromLat(e.target.value)}
+                          placeholder="Latitude"
+                          required
+                        />
+                        <Input
+                          id="fromLng"
+                          type="number"
+                          step="any"
+                          value={fromLng}
+                          onChange={(e) => setFromLng(e.target.value)}
+                          placeholder="Longitude"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="to">To</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          id="toTown"
+                          value={toTown}
+                          onChange={(e) => setToTown(e.target.value)}
+                          placeholder="Town/City"
+                          required
+                        />
+                        <Input
+                          id="toCountry"
+                          value={toCountry}
+                          onChange={(e) => setToCountry(e.target.value)}
+                          placeholder="Country"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          id="toLat"
+                          type="number"
+                          step="any"
+                          value={toLat}
+                          onChange={(e) => setToLat(e.target.value)}
+                          placeholder="Latitude"
+                          required
+                        />
+                        <Input
+                          id="toLng"
+                          type="number"
+                          step="any"
+                          value={toLng}
+                          onChange={(e) => setToLng(e.target.value)}
+                          placeholder="Longitude"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="distance">Distance</Label>
+                        <Input
+                          id="distance"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={distance}
+                          onChange={(e) => setDistance(e.target.value)}
+                          placeholder="Distance"
+                          required
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="avgSpeed">Avg Speed (knots)</Label>
+                        <Input
+                          id="avgSpeed"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={avgSpeed}
+                          onChange={(e) => setAvgSpeed(e.target.value)}
+                          placeholder="Avg speed"
+                          required
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="maxSpeed">Max Speed (knots)</Label>
+                        <Input
+                          id="maxSpeed"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={maxSpeed}
+                          onChange={(e) => setMaxSpeed(e.target.value)}
+                          placeholder="Max speed"
+                          required
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  {selectedFiles.length > 0 && (
-                    <FilePreview
-                      files={selectedFiles}
-                      onRemove={removeFile}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Add your travel notes here"
+                      className="min-h-[120px]"
                     />
-                  )}
-                </div>
+                  </div>
 
-                <Button type="submit" className="w-full">
-                  Save Entry
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  <div className="space-y-4">
+                    <Label htmlFor="media">Upload Media (Images & Videos)</Label>
+                    <div className="flex flex-col items-center justify-center w-full">
+                      <label
+                        htmlFor="media"
+                        className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted/80 transition-colors"
+                      >
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <svg className="w-8 h-8 mb-4 text-muted-foreground" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                          </svg>
+                          <p className="mb-2 text-sm text-muted-foreground">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-muted-foreground">Images and videos up to 100MB</p>
+                        </div>
+                        <Input
+                          id="media"
+                          type="file"
+                          accept="image/*, video/*"
+                          multiple
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {selectedFiles.length > 0 && (
+                      <FilePreview
+                        files={selectedFiles}
+                        onRemove={removeFile}
+                      />
+                    )}
+                  </div>
 
-        <TabsContent value="gallery" className="mt-6">
-          <MediaGallery />
-        </TabsContent>
-
-        <TabsContent value="history" className="mt-6">
-          <Card className="dark:bg-neutral-800 border-slate-200 dark:border-neutral-700">
-            <CardContent className="space-y-4 p-4 md:p-6 min-h-[300px]">
-              <h1 className="text-3xl font-bold text-slate-800 dark:text-neutral-100 mb-8">Journey History</h1>
-              
-              {isHistoryLoading && (
-                <div className="flex flex-col items-center justify-center h-full py-10 text-slate-500 dark:text-neutral-400">
-                  <RotateCw className="h-12 w-12 mb-4 animate-spin text-sky-500 dark:text-sky-400" />
-                  <p>Loading history...</p>
-                </div>
-              )}
-
-              {historyError && (
-                <div className="flex flex-col items-center justify-center h-full py-10 p-4">
-                  <AlertTriangle className="w-16 h-16 text-red-500 mb-4" />
-                  <h2 className="text-xl font-semibold text-red-700 dark:text-red-400 mb-2">Error Loading History</h2>
-                  <p className="text-slate-600 dark:text-neutral-400 text-center mb-4">{historyError}</p>
-                  <Button 
-                    onClick={fetchAndSetHistoryJourneys} 
-                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center"
-                  >
-                    <RotateCw className="w-4 h-4 mr-2" /> Try Again
+                  <Button type="submit" className="w-full">
+                    Save Entry
                   </Button>
-                </div>
-              )}
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {!isHistoryLoading && !historyError && (
-                historyJourneys.length > 0 ? (
-                  <div className="space-y-6">
-                    <p className="text-lg text-slate-700 dark:text-neutral-300">
-                      Successfully loaded {historyJourneys.length} journey entries.
-                    </p>
-                    {historyJourneys.map((journey, index) => {
-                      const uniqueKey = journey.id && journey.id !== "" && journey.id !== "undefined" ? journey.id : `journey-${index}`;
-                      return <HistoryEntryCard key={uniqueKey} journey={journey} />;
-                    })}
+          <TabsContent value="gallery" className="mt-6">
+            <MediaGallery />
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-6">
+            <Card className="dark:bg-neutral-800 border-slate-200 dark:border-neutral-700">
+              <CardContent className="space-y-4 p-4 md:p-6 min-h-[300px]">
+                <h1 className="text-3xl font-bold text-slate-800 dark:text-neutral-100 mb-8">Journey History</h1>
+                
+                {isHistoryLoading && (
+                  <div className="flex flex-col items-center justify-center h-full py-10 text-slate-500 dark:text-neutral-400">
+                    <RotateCw className="h-12 w-12 mb-4 animate-spin text-sky-500 dark:text-sky-400" />
+                    <p>Loading history...</p>
                   </div>
-                ) : (
+                )}
+
+                {historyError && (
                   <div className="flex flex-col items-center justify-center h-full py-10 p-4">
-                    <Info className="w-16 h-16 text-slate-500 mb-4" />
-                    <h2 className="text-xl font-semibold text-slate-700 dark:text-neutral-300 mb-2">No History Entries</h2>
-                    <p className="text-slate-600 dark:text-neutral-400">There are no journey entries recorded yet.</p>
+                    <AlertTriangle className="w-16 h-16 text-red-500 mb-4" />
+                    <h2 className="text-xl font-semibold text-red-700 dark:text-red-400 mb-2">Error Loading History</h2>
+                    <p className="text-slate-600 dark:text-neutral-400 text-center mb-4">{historyError}</p>
+                    <Button 
+                      onClick={fetchAndSetHistoryJourneys} 
+                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center"
+                    >
+                      <RotateCw className="w-4 h-4 mr-2" /> Try Again
+                    </Button>
                   </div>
-                )
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+                )}
+
+                {!isHistoryLoading && !historyError && (
+                  historyJourneys.length > 0 ? (
+                    <div className="space-y-6">
+                      <p className="text-lg text-slate-700 dark:text-neutral-300">
+                        Successfully loaded {historyJourneys.length} journey entries.
+                      </p>
+                      {historyJourneys.map((journey, index) => {
+                        const uniqueKey = journey.id && journey.id !== "" && journey.id !== "undefined" ? journey.id : `journey-${index}`;
+                        return <HistoryEntryCard key={uniqueKey} journey={journey} />;
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full py-10 p-4">
+                      <Info className="w-16 h-16 text-slate-500 mb-4" />
+                      <h2 className="text-xl font-semibold text-slate-700 dark:text-neutral-300 mb-2">No History Entries</h2>
+                      <p className="text-slate-600 dark:text-neutral-400">There are no journey entries recorded yet.</p>
+                    </div>
+                  )
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </main>
   )
 }

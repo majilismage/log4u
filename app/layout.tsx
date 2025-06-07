@@ -5,6 +5,7 @@ import "./globals.css"
 import { LoadingProvider } from "@/lib/LoadingContext"
 import { ProcessingModal } from "@/components/ProcessingModal"
 import { Providers } from "@/components/providers"
+import AuthWrapper from "@/components/auth/AuthWrapper"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -23,7 +24,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <LoadingProvider>
-            {children}
+            <AuthWrapper>{children}</AuthWrapper>
             <ProcessingModal />
           </LoadingProvider>
         </Providers>
