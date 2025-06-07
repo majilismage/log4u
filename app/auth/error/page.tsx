@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { FaExclamationTriangle, FaShieldAlt } from "react-icons/fa"
 import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 
-export default function AuthErrorPage() {
+function AuthErrorContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
   
@@ -64,5 +65,13 @@ export default function AuthErrorPage() {
         </CardContent>
       </Card>
     </div>
+  )
+} 
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense>
+      <AuthErrorContent />
+    </Suspense>
   )
 } 
