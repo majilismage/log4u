@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +16,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 const UserMenu = () => {
   const { data: session, status } = useSession();
+  const router = useRouter();
 
   if (status === "loading") {
     return <LoadingSpinner size="sm" />;
@@ -47,6 +49,9 @@ const UserMenu = () => {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => router.push("/settings")}>
+          Settings
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/auth/signin" })}>
           Sign Out
         </DropdownMenuItem>
