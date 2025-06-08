@@ -1,9 +1,9 @@
-import NextAuth from "next-auth"
+import NextAuth, { AuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import PostgresAdapter from "@auth/pg-adapter"
 import { db } from "@/lib/db"
 
-const handler = NextAuth({
+export const authOptions: AuthOptions = {
   adapter: PostgresAdapter(db),
   pages: {
     signIn: "/auth/signin",
@@ -15,6 +15,9 @@ const handler = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
           scope:
             "openid email profile https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
         },
@@ -23,8 +26,25 @@ const handler = NextAuth({
   ],
   callbacks: {
     async signIn({ account, profile }) {
-      // Only check scopes for Google provider
+      console.log("--- NextAuth signIn Callback ---");
+      console.log("Account object:", JSON.stringify(account, null, 2));
+
       if (account?.provider === "google") {
+        if (account.refresh_token) {
+          console.log("✅ Successfully received refresh_token from Google. Manually updating in DB...");
+          try {
+            await db.query(
+              `UPDATE accounts SET refresh_token = $1 WHERE "providerAccountId" = $2`,
+              [account.refresh_token, account.providerAccountId]
+            );
+            console.log("✅ Manual refresh_token update successful.");
+          } catch (error) {
+            console.error("!!! Error manually updating refresh_token:", error);
+          }
+        } else {
+          console.warn("!!! No refresh_token from Google. User may need to re-revoke access.");
+        }
+
         const requiredScopes = [
           "https://www.googleapis.com/auth/spreadsheets",
           "https://www.googleapis.com/auth/drive.file"
@@ -74,6 +94,8 @@ const handler = NextAuth({
       return session
     },
   },
-})
+}
+
+const handler = NextAuth(authOptions)
 
 export { handler as GET, handler as POST } 
