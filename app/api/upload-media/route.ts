@@ -1,124 +1,122 @@
 import { NextResponse } from 'next/server';
-import { uploadToGoogleDrive } from '@/lib/googleDrive';
+import { google, drive_v3 } from 'googleapis';
+import { getAuthenticatedClient } from '@/lib/google-api-client';
 import { logger } from '@/lib/logger';
 import { isValidMediaType, MAX_FILE_SIZE } from '@/lib/mediaUtils';
+import { Readable } from 'stream';
+
+// Helper function to convert a File to a Buffer
+async function fileToBuffer(file: File): Promise<Buffer> {
+  const arrayBuffer = await file.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+// This helper function finds or creates a folder and returns its ID.
+async function findOrCreateFolder(
+  drive: drive_v3.Drive,
+  folderName: string,
+  parentId: string
+): Promise<string> {
+  // Check if folder already exists
+  const query = `'${parentId}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const { data } = await drive.files.list({
+    q: query,
+    fields: 'files(id)',
+    spaces: 'drive',
+  });
+
+  if (data.files && data.files.length > 0) {
+    return data.files[0].id!;
+  }
+
+  // If not, create it
+  const folderMetadata = {
+    name: folderName,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [parentId],
+  };
+  const folder = await drive.files.create({
+    requestBody: folderMetadata,
+    fields: 'id',
+  });
+  return folder.data.id!;
+}
 
 export async function POST(request: Request) {
   try {
-    logger.info('Starting media upload request');
+    const { auth, googleDriveFolderId } = await getAuthenticatedClient();
+    if (!googleDriveFolderId) {
+      return NextResponse.json(
+        { error: 'Google Drive folder is not configured. Please set it up in your settings.' },
+        { status: 400 }
+      );
+    }
     
+    const drive = google.drive({ version: 'v3', auth });
     const formData = await request.formData();
-    logger.debug('Form data received', {
-      fields: Array.from(formData.keys())
-    });
-
+    
     const file = formData.get('file') as File;
     const journeyId = formData.get('journeyId') as string;
-    const town = formData.get('town') as string;
-    const country = formData.get('country') as string;
-    const journeyDate = formData.get('journeyDate') as string;
-
-    logger.debug('Parsed form fields', {
-      hasFile: !!file,
-      fileName: file?.name,
-      fileType: file?.type,
-      journeyId,
-      town,
-      country,
-      journeyDate
-    });
+    const journeyDate = new Date(formData.get('journeyDate') as string);
     
-    if (!file) {
-      logger.error('No file provided in request');
-      return NextResponse.json(
-        { error: 'No file provided' },
-        { status: 400 }
-      );
-    }
+    // Basic validations
+    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (!isValidMediaType(file.type)) return NextResponse.json({ error: 'Invalid file type.' }, { status: 400 });
+    if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: 'File too large.' }, { status: 400 });
+    if (!journeyId || !journeyDate) return NextResponse.json({ error: 'Missing journey information' }, { status: 400 });
 
-    // Validate file type
-    if (!isValidMediaType(file.type)) {
-      logger.error('Invalid file type', { type: file.type });
-      return NextResponse.json(
-        { error: 'Invalid file type. Only images and videos are allowed.' },
-        { status: 400 }
-      );
-    }
+    // 1. Define folder structure
+    const year = journeyDate.getFullYear().toString();
+    const month = (journeyDate.getMonth() + 1).toString().padStart(2, '0');
+    const mediaType = file.type.startsWith('image/') ? 'images' : 'videos';
 
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
-      logger.error('File too large', { size: file.size, maxSize: MAX_FILE_SIZE });
-      return NextResponse.json(
-        { error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
-        { status: 400 }
-      );
-    }
-
-    if (!journeyId || !town || !country || !journeyDate) {
-      logger.error('Missing required fields', {
-        journeyId,
-        town,
-        country,
-        journeyDate
-      });
-      return NextResponse.json(
-        { error: 'Missing required journey information' },
-        { status: 400 }
-      );
-    }
-
-    // Convert File to Buffer
-    logger.debug('Converting file to buffer', {
-      fileName: file.name,
-      fileSize: file.size
-    });
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // 2. Create folder hierarchy sequentially
+    const yearFolderId = await findOrCreateFolder(drive, year, googleDriveFolderId);
+    const monthFolderId = await findOrCreateFolder(drive, month, yearFolderId);
+    const journeyFolderId = await findOrCreateFolder(drive, journeyId, monthFolderId);
+    const mediaTypeFolderId = await findOrCreateFolder(drive, mediaType, journeyFolderId);
     
-    // Upload to Google Drive
-    logger.info('Starting Google Drive upload', {
-      fileName: file.name,
-      journeyId
-    });
+    // 3. Upload the file
+    const fileBuffer = await fileToBuffer(file);
+    const fileStream = Readable.from(fileBuffer);
     
-    const result = await uploadToGoogleDrive({
-      file: buffer,
-      fileName: file.name,
+    const fileMetadata = {
+      name: file.name,
+      parents: [mediaTypeFolderId],
+    };
+    
+    const media = {
       mimeType: file.type,
-      journeyDate: new Date(journeyDate),
-      journeyId,
-      location: {
-        town,
-        country
-      }
-    });
+      body: fileStream,
+    };
 
-    if (!result.success) {
-      logger.error('Google Drive upload failed', result);
-      return NextResponse.json(
-        { error: result.error },
-        { status: 500 }
-      );
-    }
-
-    logger.info('Upload completed successfully', {
-      fileId: result.fileId,
-      path: result.path,
-      folderLink: result.folderLink
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      media: media,
+      fields: 'id, webViewLink, webContentLink',
     });
+    
+    // 4. Get the public URL for the folder
+    const folderDetails = await drive.files.get({
+        fileId: journeyFolderId,
+        fields: 'webViewLink'
+    });
+    const folderLink = folderDetails.data.webViewLink;
+
+    logger.info('Upload completed successfully', { fileId: response.data.id, path: mediaTypeFolderId });
 
     return NextResponse.json({
       success: true,
-      fileId: result.fileId,
-      webViewLink: result.webViewLink,
-      path: result.path,
-      folderLink: result.folderLink,
-      mediaType: result.mediaType
+      fileId: response.data.id,
+      webViewLink: response.data.webViewLink,
+      folderLink: folderLink,
+      mediaType: file.type.startsWith('image/') ? 'image' : 'video'
     });
-  } catch (error) {
+
+  } catch (error: any) {
     logger.error('Unexpected error during upload', error);
-    return NextResponse.json(
-      { error: 'Failed to upload file' },
-      { status: 500 }
-    );
+    const errorMessage = error.message || 'An unexpected error occurred during file upload.';
+    const status = error.message.includes('authenticated') ? 401 : 500;
+    return NextResponse.json({ error: errorMessage }, { status });
   }
 } 
