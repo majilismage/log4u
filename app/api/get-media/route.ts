@@ -1,17 +1,7 @@
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { logger } from '@/lib/logger';
-
-// Initialize Google Drive client
-const auth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: process.env.GOOGLE_DRIVE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  },
-  scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-});
-
-const drive = google.drive({ version: 'v3', auth });
+import { getAuthenticatedClient } from '@/lib/google-api-client';
 
 interface MediaItem {
   id: string;
@@ -20,103 +10,68 @@ interface MediaItem {
   thumbnailLink?: string;
   mimeType: string;
   createdTime: string;
-  journeyId: string;
+}
+
+interface GroupedMedia {
+  [journeyId: string]: MediaItem[];
 }
 
 export async function GET() {
   try {
     logger.info('Starting media fetch request');
 
-    // Get the base folder where all journey media is stored
-    const baseFolder = process.env.GOOGLE_DRIVE_BASE_FOLDER_ID;
-    if (!baseFolder) {
-      logger.error('Base folder ID not configured');
+    const { auth, googleDriveFolderId } = await getAuthenticatedClient();
+    if (!googleDriveFolderId) {
       return NextResponse.json(
-        { error: 'Drive configuration missing' },
-        { status: 500 }
+        { error: 'Google Drive folder is not configured for this user.' },
+        { status: 400 }
       );
     }
+    
+    const drive = google.drive({ version: 'v3', auth });
 
-    logger.debug('Listing journey folders', { baseFolder });
+    logger.debug('Fetching all media files from Drive root', { googleDriveFolderId });
 
-    // List all journey folders
-    const journeyFolders = await drive.files.list({
-      q: `'${baseFolder}' in parents and mimeType = 'application/vnd.google-apps.folder'`,
-      fields: 'files(id, name)',
+    const response = await drive.files.list({
+      q: `'${googleDriveFolderId}' in parents and appProperties has { key='journeyId' } and trashed=false`,
+      fields: 'files(id, name, webViewLink, thumbnailLink, mimeType, createdTime, appProperties)',
       orderBy: 'createdTime desc',
+      pageSize: 1000, // Fetch up to 1000 items in a single request
     });
+    
+    const files = response.data.files || [];
+    logger.debug(`Found ${files.length} media files with journeyId property.`);
 
-    logger.debug('Found journey folders', { 
-      count: journeyFolders.data.files?.length || 0,
-      folders: journeyFolders.data.files?.map(f => ({ id: f.id, name: f.name }))
-    });
+    const groupedMedia = files.reduce((acc, file) => {
+      const journeyId = file.appProperties?.journeyId;
 
-    const mediaItems: MediaItem[] = [];
-
-    // For each journey folder, get its media files
-    for (const folder of journeyFolders.data.files || []) {
-      const journeyId = folder.name || 'unknown';
-      logger.debug('Processing journey folder', { journeyId, folderId: folder.id });
-      
-      // List all files in this journey's folder
-      const files = await drive.files.list({
-        q: `'${folder.id}' in parents and (mimeType contains 'image/' or mimeType contains 'video/')`,
-        fields: 'files(id, name, webViewLink, thumbnailLink, mimeType, createdTime)',
-        orderBy: 'createdTime desc',
-      });
-
-      logger.debug('Found media files in journey', { 
-        journeyId, 
-        count: files.data.files?.length || 0,
-        files: files.data.files?.map(f => ({ 
-          id: f.id, 
-          name: f.name,
-          mimeType: f.mimeType,
-          hasWebViewLink: !!f.webViewLink,
-          hasThumbnail: !!f.thumbnailLink
-        }))
-      });
-
-      // Add each file to our results
-      for (const file of files.data.files || []) {
-        if (file.id && file.name && file.webViewLink) {
-          mediaItems.push({
-            id: file.id,
-            name: file.name,
-            webViewLink: file.webViewLink,
-            thumbnailLink: file.thumbnailLink || undefined,
-            mimeType: file.mimeType || 'application/octet-stream',
-            createdTime: file.createdTime || new Date().toISOString(),
-            journeyId,
-          });
-        } else {
-          logger.warn('Skipping invalid media file', {
-            journeyId,
-            fileId: file.id,
-            fileName: file.name,
-            hasWebViewLink: !!file.webViewLink
-          });
+      if (journeyId && file.id && file.name && file.webViewLink) {
+        if (!acc[journeyId]) {
+          acc[journeyId] = [];
         }
+
+        acc[journeyId].push({
+          id: file.id,
+          name: file.name,
+          webViewLink: file.webViewLink,
+          thumbnailLink: file.thumbnailLink || undefined,
+          mimeType: file.mimeType || 'application/octet-stream',
+          createdTime: file.createdTime || new Date().toISOString(),
+        });
+      } else {
+        logger.warn('Skipping file with missing journeyId or essential fields', { fileId: file.id });
       }
-    }
+      return acc;
+    }, {} as GroupedMedia);
 
-    // Sort all media items by creation time (newest first)
-    mediaItems.sort((a, b) => {
-      return new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime();
-    });
-
-    logger.info('Media fetch completed', {
-      totalItems: mediaItems.length,
-      journeyCount: journeyFolders.data.files?.length || 0,
-      itemsPerJourney: mediaItems.reduce((acc, item) => {
-        acc[item.journeyId] = (acc[item.journeyId] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
+    logger.info('Media fetch and grouping completed', {
+      totalItems: files.length,
+      journeyCount: Object.keys(groupedMedia).length
     });
 
     return NextResponse.json({
       success: true,
-      media: mediaItems,
+      media: groupedMedia,
     });
   } catch (error) {
     logger.error('Error fetching media:', {

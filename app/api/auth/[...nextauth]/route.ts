@@ -2,6 +2,7 @@ import NextAuth, { AuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import PostgresAdapter from "@auth/pg-adapter"
 import { db } from "@/lib/db"
+import { logger } from "@/lib/logger"
 
 export const authOptions: AuthOptions = {
   adapter: PostgresAdapter(db),
@@ -26,23 +27,42 @@ export const authOptions: AuthOptions = {
   ],
   callbacks: {
     async signIn({ account, profile }) {
-      console.log("--- NextAuth signIn Callback ---");
-      console.log("Account object:", JSON.stringify(account, null, 2));
-
       if (account?.provider === "google") {
+        logger.info('NextAuth signIn callback: Received account object from Google.', {
+          provider: account.provider,
+          providerAccountId: account.providerAccountId,
+          has_refresh_token: !!account.refresh_token,
+          scope: account.scope,
+          expires_at: account.expires_at
+        });
+
         if (account.refresh_token) {
-          console.log("✅ Successfully received refresh_token from Google. Manually updating in DB...");
-          try {
-            await db.query(
-              `UPDATE accounts SET refresh_token = $1 WHERE "providerAccountId" = $2`,
-              [account.refresh_token, account.providerAccountId]
-            );
-            console.log("✅ Manual refresh_token update successful.");
-          } catch (error) {
-            console.error("!!! Error manually updating refresh_token:", error);
-          }
+          logger.info("NextAuth signIn callback: A refresh_token was provided. The adapter should handle saving it.");
         } else {
-          console.warn("!!! No refresh_token from Google. User may need to re-revoke access.");
+          logger.warn("NextAuth signIn callback: No refresh_token was provided by Google. This is expected on subsequent logins. If this is the FIRST login, there may be a configuration issue.");
+        }
+
+        // Manually update tokens in the database to ensure they are always fresh.
+        try {
+          await db.query(
+            `
+            UPDATE accounts
+            SET
+              access_token = $1,
+              expires_at = $2,
+              refresh_token = COALESCE($3, refresh_token)
+            WHERE "providerAccountId" = $4
+            `,
+            [
+              account.access_token,
+              account.expires_at,
+              account.refresh_token,
+              account.providerAccountId,
+            ]
+          );
+          logger.info("NextAuth signIn callback: Successfully updated tokens in the database.");
+        } catch (error) {
+          logger.error("NextAuth signIn callback: Error updating tokens in database.", { error });
         }
 
         const requiredScopes = [
