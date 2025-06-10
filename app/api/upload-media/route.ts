@@ -41,10 +41,13 @@ export async function POST(request: Request) {
       name: file.name,
       parents: [googleDriveFolderId],
       appProperties: {
-        journeyId: journeyId,
+        journeyId,
+        isLog4uMedia: 'true'
       },
     };
     
+    logger.debug("Creating file with metadata:", fileMetadata);
+
     const media = {
       mimeType: file.type,
       body: fileStream,

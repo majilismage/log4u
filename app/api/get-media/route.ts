@@ -33,7 +33,7 @@ export async function GET() {
     logger.debug('Fetching all media files from Drive root', { googleDriveFolderId });
 
     const response = await drive.files.list({
-      q: `'${googleDriveFolderId}' in parents and appProperties has { key='journeyId' } and trashed=false`,
+      q: `'${googleDriveFolderId}' in parents and appProperties has { key='isLog4uMedia' and value='true' } and trashed=false`,
       fields: 'files(id, name, webViewLink, thumbnailLink, mimeType, createdTime, appProperties)',
       orderBy: 'createdTime desc',
       pageSize: 1000, // Fetch up to 1000 items in a single request
@@ -77,11 +77,18 @@ export async function GET() {
     logger.error('Error fetching media:', {
       error: error instanceof Error ? {
         message: error.message,
-        stack: error.stack
-      } : error
+        stack: error.stack,
+        name: error.name,
+        // It can be useful to see the full error object for some cases
+        // @ts-ignore
+        details: error.errors || error.response?.data
+      } : JSON.stringify(error, null, 2)
     });
     return NextResponse.json(
-      { error: 'Failed to fetch media' },
+      { error: 'Failed to fetch media',
+        // Provide more detailed error info in development
+        details: process.env.NODE_ENV === 'development' && error instanceof Error ? error.message : undefined,
+       },
       { status: 500 }
     );
   }
