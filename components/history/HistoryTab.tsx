@@ -41,8 +41,28 @@ export function HistoryTab() {
       console.log('[HistoryTab] Raw API response for history:', historyResult);
       console.log('[HistoryTab] Raw API response for media:', mediaResult);
 
-      const historyData: JourneyEntry[] = historyResult.data || [];
+      const rawHistoryData = historyResult.data || [];
+      const historyData: JourneyEntry[] = rawHistoryData.map((j: any) => ({
+        id: j.journeyId,
+        fromTown: j.fromTown,
+        fromCountry: j.fromCountry,
+        toTown: j.toTown,
+        toCountry: j.toCountry,
+        departureDate: j.departureDate,
+        arrivalDate: j.arrivalDate,
+        distance: String(j.distance || ''),
+        averageSpeed: String(j.averageSpeed || ''),
+        maxSpeed: String(j.maxSpeed || ''),
+        notes: j.notes,
+        fromLatitude: j.fromLat,
+        fromLongitude: j.fromLng,
+        toLatitude: j.toLat,
+        toLongitude: j.toLng,
+      }));
+      console.log('[HistoryTab] Mapped history data:', historyData);
+
       const mediaByJourneyId = mediaResult.mediaByJourneyId || {};
+      console.log('[HistoryTab] Media grouped by Journey ID from API:', mediaByJourneyId);
 
       const combinedData: JourneyEntryWithMedia[] = historyData.map(journey => ({
         ...journey,

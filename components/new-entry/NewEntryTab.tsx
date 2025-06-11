@@ -64,10 +64,17 @@ export function NewEntryTab() {
   const uploadFiles = async (journeyId: string): Promise<{ imageFolderUrl?: string; videoFolderUrl?: string }> => {
     if (selectedFiles.length === 0) return {};
 
-    console.log('Starting file upload process', {
+    console.log('CLIENT-UPLOAD: Starting file upload process', {
+      journeyId,
+      journeyIdType: typeof journeyId,
+      journeyIdLength: journeyId.length,
+      journeyIdPattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(journeyId) ? 'UUID' :
+        /^J\d+$/.test(journeyId) ? 'J+timestamp' :
+        'other',
       fileCount: selectedFiles.length,
       fileTypes: selectedFiles.map(f => f.type),
-      fileSizes: selectedFiles.map(f => f.size)
+      fileSizes: selectedFiles.map(f => f.size),
+      timestamp: Date.now()
     });
 
     let imageFolderUrl: string | undefined;
@@ -76,10 +83,12 @@ export function NewEntryTab() {
     let completedFiles = 0;
 
     const uploadPromises = selectedFiles.map(async (file) => {
-      console.log('Preparing to upload file:', {
+      console.log('CLIENT-UPLOAD: Preparing to upload file:', {
         name: file.name,
         type: file.type,
-        size: file.size
+        size: file.size,
+        journeyIdForThisFile: journeyId,
+        timestamp: Date.now()
       });
 
       const formData = new FormData();
@@ -89,8 +98,15 @@ export function NewEntryTab() {
       formData.append('country', toCountry);
       formData.append('journeyDate', arrivalDate.toISOString());
 
+      console.log('CLIENT-UPLOAD: FormData created with journey ID:', {
+        fileName: file.name,
+        journeyIdAppended: journeyId,
+        formDataJourneyId: formData.get('journeyId'),
+        timestamp: Date.now()
+      });
+
       try {
-        console.log('Sending upload request for:', file.name);
+        console.log('CLIENT-UPLOAD: Sending upload request for:', file.name);
         const response = await fetch('/api/upload-media', {
           method: 'POST',
           body: formData,
@@ -150,86 +166,58 @@ export function NewEntryTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true, 'Processing your entry...');
-
-    // Generate journey ID if not already set
-    const currentJourneyId = journeyId || `J${Date.now()}`;
-    if (!journeyId) {
-      setJourneyId(currentJourneyId);
-    }
+    setLoading(true, 'Saving your travel entry...');
 
     try {
-      let imageFolderLink: string | undefined = undefined;
-      let videoFolderLink: string | undefined = undefined;
-
-      // First upload any files and get the folder links
-      if (selectedFiles.length > 0) {
-        setLoading(true, 'Uploading media files...');
-        const { imageFolderUrl, videoFolderUrl } = await uploadFiles(currentJourneyId);
-        imageFolderLink = imageFolderUrl;
-        videoFolderLink = videoFolderUrl;
-      }
-
-      // Then save the entry with the folder links
-      setLoading(true, 'Saving travel entry...');
-      
-      const entry = {
-        journeyId: currentJourneyId,
+      // 1. Save the core journey details to get the official journeyId
+      const entryToSave = {
         departureDate: format(departureDate, "yyyy-MM-dd"),
         arrivalDate: format(arrivalDate, "yyyy-MM-dd"),
-        fromTown,
-        fromCountry,
-        fromLat: parseFloat(fromLat),
-        fromLng: parseFloat(fromLng),
-        toTown,
-        toCountry,
-        toLat: parseFloat(toLat),
-        toLng: parseFloat(toLng),
-        distance,
-        avgSpeed,
-        maxSpeed,
+        fromTown, fromCountry,
+        fromLat: parseFloat(fromLat), fromLng: parseFloat(fromLng),
+        toTown, toCountry,
+        toLat: parseFloat(toLat), toLng: parseFloat(toLng),
+        distance, avgSpeed, maxSpeed,
         notes,
-        imageLinks: imageFolderLink || undefined,
-        videoLinks: videoFolderLink || undefined,
       };
 
-      console.log('Saving entry with data:', {
-        journeyId: currentJourneyId,
-        imageFolderLink: entry.imageLinks,
-        videoFolderLink: entry.videoLinks
-      });
-
-      const response = await fetch('/api/save-entry', {
+      console.log('CLIENT: About to save entry to get journey ID', { timestamp: Date.now() });
+      const saveResponse = await fetch('/api/save-entry', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(entry),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entryToSave),
       });
 
-      const result = await response.json();
+      const saveResult = await saveResponse.json();
+      if (!saveResult.success || !saveResult.journeyId) {
+        throw new Error(saveResult.error || 'Failed to save entry and get a journey ID.');
+      }
+      
+      const officialJourneyId = saveResult.journeyId;
+      console.log('CLIENT: Successfully saved entry, received official Journey ID:', {
+        officialJourneyId,
+        journeyIdType: typeof officialJourneyId,
+        journeyIdLength: officialJourneyId.length,
+        journeyIdPattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(officialJourneyId) ? 'UUID' :
+          /^J\d+$/.test(officialJourneyId) ? 'J+timestamp' :
+          'other',
+        timestamp: Date.now()
+      });
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to save entry');
+      // 2. If there are files, upload them using the official journeyId
+      if (selectedFiles.length > 0) {
+        setLoading(true, `Uploading ${selectedFiles.length} media file(s)...`);
+        console.log('CLIENT: About to upload files with journey ID:', {
+          journeyIdToUse: officialJourneyId,
+          fileCount: selectedFiles.length,
+          timestamp: Date.now()
+        });
+        // Note: The uploadFiles function is now fire-and-forget in the background
+        // as the main record is already saved. We don't need the folder links back.
+        await uploadFiles(officialJourneyId);
       }
 
-      // Add to local state only if save was successful
-      const newEntry: TravelEntry = {
-        id: currentJourneyId,
-        departureDate,
-        arrivalDate,
-        from: `${fromTown}, ${fromCountry}`,
-        to: `${toTown}, ${toCountry}`,
-        distance: Number.parseFloat(distance),
-        avgSpeed: Number.parseFloat(avgSpeed),
-        maxSpeed: Number.parseFloat(maxSpeed),
-        notes,
-        images: imageFolderLink ? [imageFolderLink] : [],
-      };
-
-      setEntries([newEntry, ...entries]);
-
-      // Reset form
+      // 3. Reset form state on successful submission
       setJourneyId("");
       setFromTown("");
       setFromCountry("");
@@ -247,9 +235,11 @@ export function NewEntryTab() {
 
     } catch (error) {
       console.error('Error processing entry:', error);
-      // Here you might want to show an error message to the user
+      // TODO: Show a user-friendly error message in the UI
+      setLoading(false, 'An error occurred. Please try again.');
     } finally {
-      setLoading(false);
+      // Set a success message and turn off loading state
+      setLoading(false, 'Entry saved successfully!');
     }
   };
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/google-api-client';
 import { google } from 'googleapis';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -20,6 +21,14 @@ export async function POST(request: Request) {
     const entry = await request.json();
     const sheets = google.sheets({ version: 'v4', auth });
     const journeyId = uuidv4();
+
+    logger.info('SAVE-ENTRY: Generated journey ID', { 
+      journeyId,
+      journeyIdType: typeof journeyId,
+      journeyIdLength: journeyId.length,
+      isUUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(journeyId),
+      timestamp: Date.now()
+    });
 
     const values = [
       [
@@ -53,9 +62,14 @@ export async function POST(request: Request) {
       },
     });
 
+    logger.info('SAVE-ENTRY: Sheet updated successfully, returning journey ID', { 
+      journeyId,
+      returnedJourneyId: journeyId
+    });
+
     return NextResponse.json({ success: true, journeyId: journeyId });
   } catch (error: any) {
-    console.error('API Route: Unexpected error:', error);
+    logger.error('SAVE-ENTRY: Unexpected error:', error);
     // Provide a more specific error message if available
     const errorMessage =
       error.message || 'An unexpected error occurred. Please try again.';

@@ -10,6 +10,7 @@ interface MediaItem {
   thumbnailLink?: string;
   mimeType: string;
   createdTime: string;
+  journeyId: string;
 }
 
 interface GroupedMedia {
@@ -29,49 +30,75 @@ export async function GET() {
     }
     
     const drive = google.drive({ version: 'v3', auth });
-
-    logger.debug('Fetching all media files from Drive root', { googleDriveFolderId });
+    
+    const query = `'${googleDriveFolderId}' in parents and appProperties has { key='isLog4uMedia' and value='true' } and trashed=false`;
+    logger.info('Executing Google Drive search query', { query });
 
     const response = await drive.files.list({
-      q: `'${googleDriveFolderId}' in parents and appProperties has { key='isLog4uMedia' and value='true' } and trashed=false`,
+      q: query,
       fields: 'files(id, name, webViewLink, thumbnailLink, mimeType, createdTime, appProperties)',
       orderBy: 'createdTime desc',
-      pageSize: 1000, // Fetch up to 1000 items in a single request
+      pageSize: 1000,
     });
     
     const files = response.data.files || [];
-    logger.debug(`Found ${files.length} media files with journeyId property.`);
+    logger.info(`Google Drive API returned ${files.length} files.`);
 
-    const groupedMedia = files.reduce((acc, file) => {
+    const mediaByJourneyId = files.reduce((acc, file) => {
       const journeyId = file.appProperties?.journeyId;
 
-      if (journeyId && file.id && file.name && file.webViewLink) {
+      if (journeyId && file.id && file.name && file.webViewLink && file.thumbnailLink) {
         if (!acc[journeyId]) {
           acc[journeyId] = [];
+          logger.info('GET-MEDIA: Found new journey ID in media files', {
+            journeyId,
+            journeyIdType: typeof journeyId,
+            journeyIdLength: journeyId.length,
+            journeyIdPattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(journeyId) ? 'UUID' :
+              /^J\d+$/.test(journeyId) ? 'J+timestamp' :
+              'other',
+            fileName: file.name,
+            fileId: file.id
+          });
         }
 
         acc[journeyId].push({
           id: file.id,
           name: file.name,
           webViewLink: file.webViewLink,
-          thumbnailLink: file.thumbnailLink || undefined,
+          thumbnailLink: file.thumbnailLink,
           mimeType: file.mimeType || 'application/octet-stream',
           createdTime: file.createdTime || new Date().toISOString(),
+          journeyId: journeyId,
         });
       } else {
-        logger.warn('Skipping file with missing journeyId or essential fields', { fileId: file.id });
+        logger.warn('GET-MEDIA: Skipping file with missing journeyId or other essential fields like thumbnailLink', { 
+          fileId: file.id, 
+          fileName: file.name,
+          hasJourneyId: !!journeyId,
+          hasThumbnail: !!file.thumbnailLink,
+          journeyIdValue: journeyId
+        });
       }
       return acc;
     }, {} as GroupedMedia);
 
-    logger.info('Media fetch and grouping completed', {
+    const foundJourneyIds = Object.keys(mediaByJourneyId);
+    logger.info('GET-MEDIA: Media fetch and grouping completed successfully', {
       totalItems: files.length,
-      journeyCount: Object.keys(groupedMedia).length
+      journeyCount: foundJourneyIds.length,
+      foundJourneyIds: foundJourneyIds,
+      journeyIdPatterns: foundJourneyIds.map(id => ({
+        id,
+        pattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? 'UUID' :
+          /^J\d+$/.test(id) ? 'J+timestamp' :
+          'other'
+      }))
     });
 
     return NextResponse.json({
       success: true,
-      media: groupedMedia,
+      mediaByJourneyId: mediaByJourneyId,
     });
   } catch (error) {
     logger.error('Error fetching media:', {

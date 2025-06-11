@@ -46,6 +46,18 @@ export async function GET() {
       return journeyObject;
     }).sort((a, b) => new Date(b.arrivalDate).getTime() - new Date(a.arrivalDate).getTime()); // Sort by most recent arrival
 
+    const sheetJourneyIds = data.map(entry => entry.journeyId).filter(id => id);
+    logger.info('HISTORY: Successfully fetched history entries', {
+      recordCount: data.length,
+      sheetJourneyIds: sheetJourneyIds,
+      journeyIdPatterns: sheetJourneyIds.map(id => ({
+        id,
+        pattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? 'UUID' :
+          /^J\d+$/.test(id) ? 'J+timestamp' :
+          'other'
+      }))
+    });
+
     logger.info(`Successfully fetched ${data.length} history entries for the user.`);
 
     return NextResponse.json({

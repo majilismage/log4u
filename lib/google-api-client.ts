@@ -76,10 +76,6 @@ export async function getAuthenticatedClient(): Promise<AuthenticatedClientRespo
     refresh_token,
   });
 
-  // --- START DEBUG LOG ---
-  logger.debug('YOUR_ACCESS_TOKEN_FOR_CURL:', { access_token });
-  // --- END DEBUG LOG ---
-
   // Listen for token refresh events. This is the modern way to handle token updates.
   // If the access token is expired, the library will automatically refresh it on the next API call.
   // This listener ensures that if a new token is issued, we can capture it.
