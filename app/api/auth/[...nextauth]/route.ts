@@ -28,30 +28,36 @@ export const authOptions: AuthOptions = {
   callbacks: {
     async signIn({ account, profile }) {
       if (account?.provider === "google") {
-        logger.info('NextAuth signIn callback: Received account object from Google.', {
+        // Overhaul logging for deep debugging
+        logger.info('NextAuth signIn callback triggered for Google provider.');
+        logger.debug('Received account object from Google:', {
           provider: account.provider,
           providerAccountId: account.providerAccountId,
-          has_refresh_token: !!account.refresh_token,
+          access_token_exists: !!account.access_token,
+          refresh_token_exists: !!account.refresh_token,
           scope: account.scope,
-          expires_at: account.expires_at
+          expires_at: account.expires_at,
+          token_type: account.token_type,
         });
 
         if (account.refresh_token) {
-          logger.info("NextAuth signIn callback: A refresh_token was provided. The adapter should handle saving it.");
+          logger.info("A new refresh_token was provided by Google. This should happen on the first consent.");
         } else {
-          logger.warn("NextAuth signIn callback: No refresh_token was provided by Google. This is expected on subsequent logins. If this is the FIRST login, there may be a configuration issue.");
+          logger.warn("No refresh_token was provided. This is expected on subsequent logins. If you just revoked and re-granted access, this might indicate a configuration issue.");
         }
 
         // Manually update tokens in the database to ensure they are always fresh.
         try {
-          await db.query(
+          logger.debug('Attempting to manually update tokens in the database...', { providerAccountId: account.providerAccountId });
+          const result = await db.query(
             `
             UPDATE accounts
             SET
               access_token = $1,
               expires_at = $2,
-              refresh_token = COALESCE($3, refresh_token)
+              refresh_token = COALESCE($3, refresh_token) -- Only update refresh_token if a new one is provided
             WHERE "providerAccountId" = $4
+            RETURNING "userId", access_token, refresh_token, expires_at; -- Return the updated row for verification
             `,
             [
               account.access_token,
@@ -60,9 +66,14 @@ export const authOptions: AuthOptions = {
               account.providerAccountId,
             ]
           );
-          logger.info("NextAuth signIn callback: Successfully updated tokens in the database.");
+
+          if (result.rows.length > 0) {
+            logger.info("Successfully updated tokens in the database.", { updatedRow: result.rows[0] });
+          } else {
+            logger.warn("The UPDATE query did not find a matching account to update. This is unexpected. The user may not exist in the 'accounts' table yet. The adapter should handle creation shortly.", { providerAccountId: account.providerAccountId });
+          }
         } catch (error) {
-          logger.error("NextAuth signIn callback: Error updating tokens in database.", { error });
+          logger.error("Error updating tokens in database during signIn callback.", { error });
         }
 
         const requiredScopes = [

@@ -27,6 +27,19 @@ export async function POST(request: Request) {
     const file = formData.get('file') as File;
     const journeyId = formData.get('journeyId') as string;
     
+    logger.info('UPLOAD-MEDIA: Received request with journey ID', {
+      journeyId,
+      journeyIdType: typeof journeyId,
+      journeyIdLength: journeyId ? journeyId.length : 0,
+      journeyIdPattern: journeyId ? (
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(journeyId) ? 'UUID' :
+        /^J\d+$/.test(journeyId) ? 'J+timestamp' :
+        'other'
+      ) : 'null',
+      fileName: file?.name,
+      timestamp: Date.now()
+    });
+    
     // Basic validations
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     if (!isValidMediaType(file.type)) return NextResponse.json({ error: 'Invalid file type.' }, { status: 400 });
@@ -41,10 +54,13 @@ export async function POST(request: Request) {
       name: file.name,
       parents: [googleDriveFolderId],
       appProperties: {
-        journeyId: journeyId,
+        journeyId,
+        isLog4uMedia: 'true'
       },
     };
     
+    logger.debug("UPLOAD-MEDIA: Creating file with metadata:", fileMetadata);
+
     const media = {
       mimeType: file.type,
       body: fileStream,
@@ -56,7 +72,11 @@ export async function POST(request: Request) {
       fields: 'id, webViewLink, webContentLink',
     });
     
-    logger.info('Upload completed successfully with metadata', { fileId: response.data.id, journeyId: journeyId });
+    logger.info('UPLOAD-MEDIA: Upload completed successfully with metadata', { 
+      fileId: response.data.id, 
+      journeyId: journeyId,
+      finalJourneyIdUsed: fileMetadata.appProperties.journeyId
+    });
 
     return NextResponse.json({
       success: true,
@@ -66,7 +86,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    logger.error('Unexpected error during upload', error);
+    logger.error('UPLOAD-MEDIA: Unexpected error during upload', error);
     const errorMessage = error.message || 'An unexpected error occurred during file upload.';
     const status = error.message.includes('authenticated') ? 401 : 500;
     return NextResponse.json({ error: errorMessage }, { status });

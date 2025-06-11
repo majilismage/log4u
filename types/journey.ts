@@ -26,4 +26,17 @@ export interface JourneyEntry {
   //   webViewLink: string; 
   //   mimeType: string; 
   // }>;
+}
+
+export interface MediaItem {
+  id: string;
+  name: string;
+  thumbnailLink: string;
+  webViewLink: string;
+  mimeType: string;
+  journeyId: string;
+}
+
+export interface JourneyEntryWithMedia extends JourneyEntry {
+  media: MediaItem[];
 } 

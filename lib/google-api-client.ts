@@ -72,26 +72,42 @@ export async function getAuthenticatedClient(): Promise<AuthenticatedClientRespo
   });
 
   auth.setCredentials({
-    access_token: access_token,
-    refresh_token: refresh_token,
+    access_token,
+    refresh_token,
+  });
+
+  // Listen for token refresh events. This is the modern way to handle token updates.
+  // If the access token is expired, the library will automatically refresh it on the next API call.
+  // This listener ensures that if a new token is issued, we can capture it.
+  auth.on('tokens', (tokens) => {
+    logger.info(`Tokens event received for user ID: ${userId}`);
+    // Update the auth client with the new tokens for the current request
+    auth.setCredentials(tokens);
+    
+    // Asynchronously update the tokens in the database for future requests
+    db.query(
+      `UPDATE accounts SET
+         access_token = $1,
+         refresh_token = COALESCE($2, refresh_token),
+         expires_at = $3
+       WHERE "userId" = $4 AND provider = 'google'`,
+      [tokens.access_token, tokens.refresh_token, tokens.expiry_date, userId]
+    ).then(() => {
+      logger.info(`Successfully updated tokens in DB for user ID: ${userId} via 'tokens' event.`);
+    }).catch(err => {
+      logger.error(`Error updating tokens in DB for user ID: ${userId} via 'tokens' event.`, { error: err });
+    });
   });
 
   try {
-    // Force a token refresh to ensure the access_token is valid.
-    const { token } = await auth.getAccessToken();
-    if (token) {
-      auth.setCredentials({ access_token: token });
-      logger.info(`getAuthenticatedClient: Successfully refreshed access token for user ID: ${userId}`);
-    } else {
-      logger.warn(`getAuthenticatedClient: Access token refresh did not return a new token for user ID: ${userId}`);
-    }
+    // Proactively refresh the token if it's expired. This will trigger the 'tokens' event if a refresh happens.
+    // The googleapis library is smart enough to only make a network request if the token is actually expired.
+    await auth.getAccessToken();
+    logger.info(`getAuthenticatedClient: Access token is valid or was refreshed for user ID: ${userId}`);
   } catch (error) {
     logger.error('getAuthenticatedClient: Failed to refresh access token.', { userId, error });
-    throw new Error('Could not refresh access token. Please try re-authenticating.');
+    throw new Error('Could not refresh access token. The refresh token might be revoked. Please try re-authenticating.');
   }
-
-  // The googleapis library will automatically handle refreshing the access_token
-  // if it's expired, as long as a valid refresh_token is provided.
 
   return {
     auth,
