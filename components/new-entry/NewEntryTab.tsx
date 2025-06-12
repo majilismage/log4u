@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { useLoading } from "@/lib/LoadingContext"
 import { FilePreview } from "@/components/FilePreview"
+import { LocationAutocomplete } from "@/components/ui/location-autocomplete"
 import type { JourneyEntry } from "@/types/journey"
 
 interface TravelEntry {
@@ -300,85 +301,33 @@ export function NewEntryTab() {
               </Popover>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="from">From</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  id="fromTown"
-                  value={fromTown}
-                  onChange={(e) => setFromTown(e.target.value)}
-                  placeholder="Town/City"
-                  required
-                />
-                <Input
-                  id="fromCountry"
-                  value={fromCountry}
-                  onChange={(e) => setFromCountry(e.target.value)}
-                  placeholder="Country"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  id="fromLat"
-                  type="number"
-                  step="any"
-                  value={fromLat}
-                  onChange={(e) => setFromLat(e.target.value)}
-                  placeholder="Latitude"
-                  required
-                />
-                <Input
-                  id="fromLng"
-                  type="number"
-                  step="any"
-                  value={fromLng}
-                  onChange={(e) => setFromLng(e.target.value)}
-                  placeholder="Longitude"
-                  required
-                />
-              </div>
-            </div>
+            <LocationAutocomplete
+              label="From"
+              cityValue={fromTown}
+              countryValue={fromCountry}
+              latValue={fromLat}
+              lngValue={fromLng}
+              onCityChange={setFromTown}
+              onCountryChange={setFromCountry}
+              onLatChange={setFromLat}
+              onLngChange={setFromLng}
+              placeholder="Town/City"
+              required
+            />
 
-            <div className="space-y-2">
-              <Label htmlFor="to">To</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  id="toTown"
-                  value={toTown}
-                  onChange={(e) => setToTown(e.target.value)}
-                  placeholder="Town/City"
-                  required
-                />
-                <Input
-                  id="toCountry"
-                  value={toCountry}
-                  onChange={(e) => setToCountry(e.target.value)}
-                  placeholder="Country"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  id="toLat"
-                  type="number"
-                  step="any"
-                  value={toLat}
-                  onChange={(e) => setToLat(e.target.value)}
-                  placeholder="Latitude"
-                  required
-                />
-                <Input
-                  id="toLng"
-                  type="number"
-                  step="any"
-                  value={toLng}
-                  onChange={(e) => setToLng(e.target.value)}
-                  placeholder="Longitude"
-                  required
-                />
-              </div>
-            </div>
+            <LocationAutocomplete
+              label="To"
+              cityValue={toTown}
+              countryValue={toCountry}
+              latValue={toLat}
+              lngValue={toLng}
+              onCityChange={setToTown}
+              onCountryChange={setToCountry}
+              onLatChange={setToLat}
+              onLngChange={setToLng}
+              placeholder="Town/City"
+              required
+            />
 
             <div className="col-span-2 grid grid-cols-3 gap-4">
               <div className="space-y-2">
