@@ -2,6 +2,7 @@ import React from 'react';
 import type { JourneyEntryWithMedia, MediaItem } from '@/types/journey'; // Adjust path if needed
 import JourneyMetadata from './JourneyMetadata'; // Import the actual component
 import JourneyContent from './JourneyContent'; // Import the actual JourneyContent component
+import { LazyImage } from '@/components/gallery/LazyImage';
 
 const PlayIcon = () => (
   <svg className="w-8 h-8 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -20,22 +21,13 @@ const JourneyMediaGrid: React.FC<{ media: MediaItem[] }> = ({ media }) => (
         
         return (
           <div key={item.id} className="aspect-square relative group bg-slate-100 dark:bg-neutral-700 rounded-md overflow-hidden">
-            <img
+            <LazyImage
               src={thumbnailUrl}
               alt={item.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-              loading="lazy"
-              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                const target = e.currentTarget as HTMLImageElement;
-                target.src = 'https://via.placeholder.com/150?text=Error';
-                target.onerror = null; // Prevent infinite loop if placeholder also fails
-              }}
+              title={item.name}
+              className="aspect-square"
+              isVideo={item.mimeType.startsWith('video/')}
             />
-            {item.mimeType.startsWith('video/') && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
-                <PlayIcon />
-              </div>
-            )}
           </div>
         );
       })}

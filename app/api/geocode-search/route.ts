@@ -1,78 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nominatimClient } from '@/lib/nominatim-client';
 import { logger } from '@/lib/logger';
+import { timeApiCall } from '@/lib/performance-monitor';
 import type { GeocodeSearchRequest, GeocodeSearchResponse } from '@/types/location';
 
 export async function GET(request: NextRequest) {
+  const startTime = performance.now();
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get('q');
+  
+  // Fast validation - fail fast for invalid requests
+  if (!query || query.trim().length < 3) {
+    return NextResponse.json(
+      {
+        success: true,
+        suggestions: [],
+        error: null
+      } as GeocodeSearchResponse,
+      { status: 200 }
+    );
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
     const limit = searchParams.get('limit');
     const countrycodes = searchParams.get('countrycodes');
     const debug = searchParams.get('debug') === 'true';
 
-    // Validate required parameters
-    if (!query) {
-      return NextResponse.json(
-        {
-          success: false,
-          suggestions: [],
-          error: 'Query parameter "q" is required'
-        } as GeocodeSearchResponse,
-        { status: 400 }
-      );
-    }
-
-    // Validate query length (minimum 3 characters)
-    if (query.trim().length < 3) {
-      return NextResponse.json(
-        {
-          success: true,
-          suggestions: [],
-          error: null
-        } as GeocodeSearchResponse,
-        { status: 200 }
-      );
-    }
-
-    // Build search request
+    // Build search request with minimal overhead
     const searchRequest: GeocodeSearchRequest = {
       query: query.trim(),
-      limit: limit ? parseInt(limit, 10) : 10,
+      limit: limit ? Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50) : 10,
       countrycodes: countrycodes || undefined
     };
 
-    // Validate limit parameter
-    if (searchRequest.limit && (searchRequest.limit < 1 || searchRequest.limit > 50)) {
-      return NextResponse.json(
-        {
-          success: false,
-          suggestions: [],
-          error: 'Limit must be between 1 and 50'
-        } as GeocodeSearchResponse,
-        { status: 400 }
-      );
+    // Only log in development or debug mode
+    if (process.env.NODE_ENV === 'development' || debug) {
+      logger.info('Geocode search request', {
+        query: searchRequest.query,
+        limit: searchRequest.limit,
+        countrycodes: searchRequest.countrycodes
+      });
     }
 
-    logger.info('Geocode search request', {
-      query: searchRequest.query,
-      limit: searchRequest.limit,
-      countrycodes: searchRequest.countrycodes,
-      debug,
-      userAgent: request.headers.get('user-agent')
-    });
+    // Perform the search with performance monitoring
+    const suggestions = await timeApiCall(
+      'geocode-search',
+      () => nominatimClient.search(searchRequest),
+      { query: searchRequest.query, limit: searchRequest.limit }
+    );
 
-    // Perform the search
-    const suggestions = await nominatimClient.search(searchRequest);
+    const totalDuration = performance.now() - startTime;
 
-    // Log results
-    logger.info('Geocode search response', {
-      query: searchRequest.query,
-      resultCount: suggestions.length,
-      success: true
-    });
+    // Minimal success logging
+    if (process.env.NODE_ENV === 'development' || debug) {
+      logger.info('Geocode search response', {
+        query: searchRequest.query,
+        resultCount: suggestions.length,
+        totalDuration: Math.round(totalDuration),
+        cached: suggestions.length > 0 && totalDuration < 100 // Assume cached if very fast
+      });
+    }
 
-    // Debug mode: return additional information
+    // Debug mode: return additional information including performance data
     if (debug) {
       return NextResponse.json(
         {
@@ -80,17 +69,22 @@ export async function GET(request: NextRequest) {
           suggestions,
           debug: {
             query: searchRequest.query,
-            searchStrategies: 'Enhanced fuzzy search enabled',
+            searchStrategies: 'Optimized search enabled',
             resultCount: suggestions.length,
-            cities: suggestions.map(s => s.city)
+            cities: suggestions.map(s => s.city),
+            performance: {
+              totalDuration: Math.round(totalDuration),
+              cached: totalDuration < 100
+            }
           },
           error: null
         },
         { 
           status: 200,
           headers: {
-            'Cache-Control': 'public, max-age=60', // Shorter cache for debug
-            'Content-Type': 'application/json'
+            'Cache-Control': 'public, max-age=60',
+            'Content-Type': 'application/json',
+            'X-Response-Time': Math.round(totalDuration).toString()
           }
         }
       );
@@ -105,17 +99,24 @@ export async function GET(request: NextRequest) {
       { 
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
-          'Content-Type': 'application/json'
+          'Cache-Control': 'public, max-age=300',
+          'Content-Type': 'application/json',
+          'X-Response-Time': Math.round(totalDuration).toString()
         }
       }
     );
 
   } catch (error) {
-    logger.error('Geocode search API error', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    const totalDuration = performance.now() - startTime;
+    
+    // Minimal error logging
+    if (process.env.NODE_ENV === 'development') {
+      logger.error('Geocode search API error', {
+        query,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        duration: Math.round(totalDuration)
+      });
+    }
 
     // Return graceful error response
     return NextResponse.json(
@@ -124,7 +125,12 @@ export async function GET(request: NextRequest) {
         suggestions: [],
         error: 'Geocoding service temporarily unavailable. Please enter location manually.'
       } as GeocodeSearchResponse,
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'X-Response-Time': Math.round(totalDuration).toString()
+        }
+      }
     );
   }
 }
@@ -216,7 +222,6 @@ export async function HEAD(request: NextRequest) {
       });
     }
   } catch (error) {
-    logger.error('Geocode health check failed', { error });
     return new NextResponse(null, { status: 503 });
   }
 } 
