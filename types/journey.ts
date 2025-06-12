@@ -35,6 +35,7 @@ export interface MediaItem {
   webViewLink: string;
   mimeType: string;
   journeyId: string;
+  createdTime: string;
 }
 
 export interface JourneyEntryWithMedia extends JourneyEntry {

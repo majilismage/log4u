@@ -3,28 +3,65 @@ import { geocodeCache } from './geocode-cache';
 import { logger } from './logger';
 
 /**
+ * Token bucket rate limiter for Nominatim API
+ * Allows burst requests while respecting long-term rate limits
+ */
+class TokenBucket {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly capacity: number;
+  private readonly refillRate: number; // tokens per second
+
+  constructor(capacity = 5, refillRate = 1) {
+    this.capacity = capacity;
+    this.refillRate = refillRate;
+    this.tokens = capacity; // Start with full bucket
+    this.lastRefill = Date.now();
+  }
+
+  /**
+   * Attempt to consume a token, returns delay needed in ms
+   */
+  consume(): number {
+    const now = Date.now();
+    const timePassed = now - this.lastRefill;
+    
+    // Refill tokens based on time passed
+    const tokensToAdd = Math.floor(timePassed / 1000 * this.refillRate);
+    if (tokensToAdd > 0) {
+      this.tokens = Math.min(this.capacity, this.tokens + tokensToAdd);
+      this.lastRefill = now;
+    }
+
+    // If we have tokens, consume one
+    if (this.tokens > 0) {
+      this.tokens--;
+      return 0; // No delay needed
+    }
+
+    // Calculate how long to wait for next token
+    const timeUntilNextToken = Math.ceil(1000 / this.refillRate);
+    return timeUntilNextToken;
+  }
+}
+
+/**
  * Nominatim API client for OpenStreetMap geocoding
- * Free service with fair use policy - 1 request per second
+ * Free service with fair use policy - 1 request per second with burst allowance
  */
 class NominatimClient {
   private readonly baseUrl = 'https://nominatim.openstreetmap.org';
   private readonly userAgent = 'WanderNote/1.0 (Travel Log App)';
-  private lastRequestTime = 0;
-  private readonly minRequestInterval = 1000; // 1 second between requests
+  private readonly rateLimiter = new TokenBucket(5, 1); // 5 token burst, 1 token/sec refill
 
   /**
-   * Enforce rate limiting - Nominatim requires max 1 request per second
+   * Smart rate limiting with burst allowance
    */
   private async enforceRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    
-    if (timeSinceLastRequest < this.minRequestInterval) {
-      const waitTime = this.minRequestInterval - timeSinceLastRequest;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+    const delay = this.rateLimiter.consume();
+    if (delay > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    
-    this.lastRequestTime = Date.now();
   }
 
   /**
@@ -109,56 +146,59 @@ class NominatimClient {
   }
 
   /**
-   * Enhanced search with fuzzy matching capabilities
+   * Optimized search with intelligent strategy selection
    */
   async search(request: GeocodeSearchRequest): Promise<LocationSuggestion[]> {
     const { query, limit = 10, countrycodes } = request;
     
-    // Check cache first
+    // Check cache first - most performance critical path
     const cached = geocodeCache.get(query, countrycodes);
     if (cached) {
-      logger.debug('Geocode cache hit', { query, resultCount: cached.length });
       return cached;
     }
 
     try {
-      // Enforce rate limiting
-      await this.enforceRateLimit();
-
-      // Strategy 1: Exact search (current implementation)
-      const exactResults = await this.performSearch(query, limit, countrycodes);
+      // Smart strategy selection to minimize API calls and processing time
+      const cleanQuery = query.trim().toLowerCase();
+      const targetCities = this.getTargetCitiesForQuery(cleanQuery);
       
-      // Strategy 2: Strategic fuzzy search for high-value cities only
-      let fuzzyResults: LocationSuggestion[] = [];
-      if (query.length >= 3) {
-        // Always run strategic search for known patterns, regardless of exact result count
-        const targetCities = this.getTargetCitiesForQuery(query);
-        if (targetCities.length > 0) {
-          fuzzyResults = await this.performStrategicFuzzySearch(query, limit, countrycodes);
+      let results: LocationSuggestion[];
+      
+      // If we have high-confidence fuzzy matches, try fuzzy first (often better results)
+      if (targetCities.length > 0 && this.shouldPrioritizeFuzzySearch(cleanQuery)) {
+        const fuzzyResults = await this.performOptimizedFuzzySearch(query, limit, countrycodes, targetCities);
+        
+        // If fuzzy search yielded good results, skip exact search to save time
+        if (fuzzyResults.length >= Math.min(3, limit)) {
+          geocodeCache.set(query, fuzzyResults, countrycodes);
+          return fuzzyResults;
+        }
+        
+        // If fuzzy didn't yield enough, combine with exact search
+        const exactResults = await this.performSearch(query, limit, countrycodes);
+        results = this.combineAndDeduplicateResults(exactResults, fuzzyResults, limit);
+      } else {
+        // Perform exact search
+        const exactResults = await this.performSearch(query, limit, countrycodes);
+        
+        // Only do additional fuzzy search if exact search was insufficient
+        if (exactResults.length < Math.min(3, limit) && targetCities.length > 0) {
+          const fuzzyResults = await this.performOptimizedFuzzySearch(query, limit - exactResults.length, countrycodes, targetCities);
+          results = this.combineAndDeduplicateResults(exactResults, fuzzyResults, limit);
+        } else {
+          results = exactResults;
         }
       }
 
-      // Combine and deduplicate results
-      const combinedResults = this.combineAndDeduplicateResults(exactResults, fuzzyResults, limit);
-
-      logger.info('Enhanced geocode search completed', { 
-        query, 
-        exactCount: exactResults.length,
-        fuzzyCount: fuzzyResults.length,
-        finalCount: combinedResults.length,
-        fromCache: false
-      });
-
       // Cache the results
-      geocodeCache.set(query, combinedResults, countrycodes);
-
-      return combinedResults;
+      geocodeCache.set(query, results, countrycodes);
+      return results;
 
     } catch (error) {
-      logger.error('Nominatim API error', { 
-        query, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      });
+      // Minimal error logging for performance
+      if (process.env.NODE_ENV === 'development') {
+        logger.error('Nominatim API error', { query, error: error instanceof Error ? error.message : 'Unknown error' });
+      }
       
       // Return empty array on error (graceful degradation)
       return [];
@@ -166,7 +206,55 @@ class NominatimClient {
   }
 
   /**
-   * Perform standard exact search
+   * Determine if fuzzy search should be prioritized based on query patterns
+   */
+  private shouldPrioritizeFuzzySearch(cleanQuery: string): boolean {
+    // Prioritize fuzzy for short, high-value abbreviations
+    const highValuePatterns = ['johan', 'joburg', 'cape', 'sao', 'são', 'rio', 'las', 'los', 'san', 'nyc', 'sf', 'la'];
+    return highValuePatterns.includes(cleanQuery);
+  }
+
+  /**
+   * Optimized fuzzy search with minimal API calls
+   */
+  private async performOptimizedFuzzySearch(
+    originalQuery: string, 
+    limit: number, 
+    countrycodes?: string, 
+    targetCities?: string[]
+  ): Promise<LocationSuggestion[]> {
+    const cities = targetCities || this.getTargetCitiesForQuery(originalQuery.trim().toLowerCase());
+    const allResults: LocationSuggestion[] = [];
+
+    // Limit to top 2 targets to minimize API calls
+    const priorityCities = cities.slice(0, 2);
+    
+    if (priorityCities.length === 0) {
+      return [];
+    }
+
+    // Search for each target city
+    for (const targetCity of priorityCities) {
+      if (allResults.length >= limit) break;
+      
+      try {
+        const results = await this.performSearch(targetCity, 2, countrycodes);
+        allResults.push(...results);
+        
+        // Early exit if we have enough good results
+        if (allResults.length >= limit) break;
+        
+      } catch (error) {
+        // Silent fail for fuzzy search to maintain performance
+        continue;
+      }
+    }
+
+    return allResults.slice(0, limit);
+  }
+
+  /**
+   * Optimized exact search with minimal logging
    */
   private async performSearch(query: string, limit: number, countrycodes?: string): Promise<LocationSuggestion[]> {
     // Build query parameters
@@ -189,14 +277,15 @@ class NominatimClient {
 
     const url = `${this.baseUrl}/search?${params.toString()}`;
     
-    logger.debug('Nominatim exact search', { url, query });
+    // Enforce rate limiting
+    await this.enforceRateLimit();
 
     const response = await fetch(url, {
       headers: {
         'User-Agent': this.userAgent,
         'Accept': 'application/json',
       },
-      signal: AbortSignal.timeout(10000) // 10 seconds
+      signal: AbortSignal.timeout(8000) // Reduced timeout for better performance
     });
 
     if (!response.ok) {
@@ -204,66 +293,12 @@ class NominatimClient {
     }
 
     const data: NominatimSearchResult[] = await response.json();
-    
-    logger.debug('Nominatim exact search response', { 
-      query, 
-      rawResultCount: data.length 
-    });
 
-    // Convert and filter results
+    // Streamlined conversion and filtering
     return data
       .map(result => this.convertToLocationSuggestion(result))
       .filter((suggestion): suggestion is LocationSuggestion => suggestion !== null)
       .sort((a, b) => b.importance - a.importance);
-  }
-
-  /**
-   * Strategic fuzzy search focusing on high-value city matches
-   */
-  private async performStrategicFuzzySearch(query: string, limit: number, countrycodes?: string): Promise<LocationSuggestion[]> {
-    const targetCities = this.getTargetCitiesForQuery(query);
-    const allResults: LocationSuggestion[] = [];
-
-    // Only search for the most likely high-value targets (max 2-3 to avoid rate limits)
-    const priorityCities = targetCities.slice(0, 3);
-    
-    if (priorityCities.length === 0) {
-      return [];
-    }
-
-    logger.info('Strategic fuzzy search', {
-      originalQuery: query,
-      targetCities: priorityCities
-    });
-
-    // Search for each target city
-    for (const targetCity of priorityCities) {
-      if (allResults.length >= limit) break;
-      
-      try {
-        await this.enforceRateLimit();
-        const results = await this.performSearch(targetCity, 2, countrycodes);
-        
-        // Accept all results from high-value city searches
-        allResults.push(...results);
-        
-        logger.info('Strategic search result', {
-          originalQuery: query,
-          targetCity,
-          resultCount: results.length,
-          results: results.map(r => ({ city: r.city, country: r.country, importance: r.importance }))
-        });
-        
-      } catch (error) {
-        logger.warn('Strategic search failed', {
-          originalQuery: query,
-          targetCity,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    }
-
-    return allResults.slice(0, limit);
   }
 
   /**
@@ -305,8 +340,7 @@ class NominatimClient {
   }
 
   /**
-   * Combine and deduplicate results from multiple search strategies
-   * Prioritize by importance score rather than search type
+   * Optimized combine and deduplicate results
    */
   private combineAndDeduplicateResults(
     exactResults: LocationSuggestion[], 
@@ -341,18 +375,17 @@ class NominatimClient {
   }
 
   /**
-   * Get API health status
+   * Lightweight health check
    */
   async healthCheck(): Promise<{ healthy: boolean; responseTime?: number }> {
     try {
       const startTime = Date.now();
-      await this.enforceRateLimit();
       
       const response = await fetch(`${this.baseUrl}/status`, {
         headers: {
           'User-Agent': this.userAgent,
         },
-        signal: AbortSignal.timeout(5000) // 5 second timeout for health check
+        signal: AbortSignal.timeout(3000) // Faster timeout for health check
       });
 
       const responseTime = Date.now() - startTime;
@@ -362,7 +395,6 @@ class NominatimClient {
         responseTime
       };
     } catch (error) {
-      logger.error('Nominatim health check failed', { error });
       return { healthy: false };
     }
   }

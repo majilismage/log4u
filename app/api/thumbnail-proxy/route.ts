@@ -11,6 +11,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
   }
 
+  // Check ETag for caching
+  const etag = `"${Buffer.from(url).toString('base64')}"`;
+  const ifNoneMatch = request.headers.get('if-none-match');
+  
+  if (ifNoneMatch === etag) {
+    return new NextResponse(null, { status: 304 });
+  }
+
   try {
     logger.debug('THUMBNAIL-PROXY: Fetching thumbnail', { url });
 
@@ -53,8 +61,9 @@ export async function GET(request: NextRequest) {
           status: 200,
           headers: {
             'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=600, must-revalidate', // Cache for 10 mins
+            'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400', // Cache for 1 hour, serve stale for 24 hours
             'Cross-Origin-Resource-Policy': 'cross-origin',
+            'ETag': `"${Buffer.from(url).toString('base64')}"`, // Simple ETag based on URL
           },
         });
       } catch (authError) {
@@ -96,8 +105,9 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=600, must-revalidate',
+        'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
         'Cross-Origin-Resource-Policy': 'cross-origin',
+        'ETag': `"${Buffer.from(url).toString('base64')}"`, // Simple ETag based on URL
       },
     });
 
