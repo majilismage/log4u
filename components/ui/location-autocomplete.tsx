@@ -163,12 +163,12 @@ export function LocationAutocomplete({
   }, []);
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <Label htmlFor={`${label.toLowerCase()}-city`}>{label}</Label>
+    <div className={cn("space-y-4", className)}>
+      <Label htmlFor={`${label.toLowerCase()}-city`} className="text-base font-medium">{label}</Label>
       
       {/* City Input with Autocomplete */}
       <div className="relative">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
           <div className="relative">
             <Input
               ref={inputRef}
@@ -183,43 +183,46 @@ export function LocationAutocomplete({
               }}
               placeholder={placeholder}
               required={required}
-              className="pr-8"
+              className="pr-10 h-12 px-4 text-base"
             />
             {isLoading && (
-              <Loader2 className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+              <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 animate-spin text-muted-foreground" />
             )}
           </div>
           
-          <Input
-            id={`${label.toLowerCase()}-country`}
-            value={countryValue}
-            onChange={(e) => onCountryChange(e.target.value)}
-            placeholder="Country"
-            required={required}
-          />
+          <div>
+            <Input
+              id={`${label.toLowerCase()}-country`}
+              value={countryValue}
+              onChange={(e) => onCountryChange(e.target.value)}
+              placeholder="Country"
+              required={required}
+              className="h-12 px-4 text-base"
+            />
+          </div>
         </div>
 
         {/* Suggestions Dropdown */}
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto"
+            className="absolute z-50 w-full mt-2 bg-background border border-border rounded-lg shadow-xl max-h-64 overflow-auto"
           >
             {suggestions.map((suggestion, index) => (
               <div
                 key={suggestion.id}
                 className={cn(
-                  "px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-muted",
+                  "px-4 py-3 cursor-pointer flex items-center gap-3 hover:bg-muted transition-colors touch-manipulation",
                   selectedIndex === index && "bg-muted"
                 )}
                 onClick={() => handleSuggestionSelect(suggestion)}
               >
-                <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">
+                  <div className="font-medium text-base truncate">
                     {suggestion.fullName}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     {suggestion.lat.toFixed(4)}, {suggestion.lng.toFixed(4)}
                   </div>
                 </div>
@@ -230,7 +233,7 @@ export function LocationAutocomplete({
       </div>
 
       {/* Latitude and Longitude Inputs */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
         <Input
           id={`${label.toLowerCase()}-lat`}
           type="number"
@@ -239,6 +242,7 @@ export function LocationAutocomplete({
           onChange={(e) => onLatChange(e.target.value)}
           placeholder="Latitude"
           required={required}
+          className="h-12 px-4 text-base"
         />
         <Input
           id={`${label.toLowerCase()}-lng`}
@@ -248,6 +252,7 @@ export function LocationAutocomplete({
           onChange={(e) => onLngChange(e.target.value)}
           placeholder="Longitude"
           required={required}
+          className="h-12 px-4 text-base"
         />
       </div>
     </div>
