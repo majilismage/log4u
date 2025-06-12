@@ -31,7 +31,7 @@ export default function SignInPage() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Animated Background Scene */}
-      <div className="absolute inset-0 bg-gradient-to-b from-sky-300 via-sky-200 to-amber-100 dark:from-sky-500 dark:via-sky-400 dark:to-amber-700">
+      <div className="absolute inset-0 h-screen bg-gradient-to-b from-sky-300 via-sky-200 to-amber-100 dark:from-sky-500 dark:via-sky-400 dark:to-amber-700">
         {/* Sun */}
         <div className="absolute top-16 right-16 w-20 h-20 md:w-24 md:h-24">
           <div className="w-full h-full bg-yellow-400 dark:bg-yellow-300 rounded-full shadow-lg animate-pulse">
@@ -47,7 +47,7 @@ export default function SignInPage() {
         </div>
 
         {/* Ocean */}
-        <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-blue-500 to-blue-400 dark:from-blue-900 dark:to-blue-700">
+        <div className="absolute bottom-0 left-0 right-0 h-1/4 sm:h-1/3 bg-gradient-to-t from-blue-500 to-blue-400 dark:from-blue-900 dark:to-blue-700">
           <div className="absolute inset-0 opacity-30">
             <div className="wave wave-1"></div>
             <div className="wave wave-2"></div>
@@ -56,9 +56,9 @@ export default function SignInPage() {
         </div>
 
         {/* Sailboat */}
-        <div className="absolute bottom-16 right-0 opacity-80 dark:opacity-60">
+        <div className="absolute bottom-8 sm:bottom-16 right-0 opacity-80 dark:opacity-60">
           <div className="sailboat animate-sail-across">
-            <div className="text-8xl">⛵</div>
+            <div className="text-6xl sm:text-8xl">⛵</div>
           </div>
         </div>
       </div>
@@ -123,7 +123,15 @@ export default function SignInPage() {
           50% { transform: translateY(-8px) rotate(2deg); }
         }
         
-        @keyframes sail-across {
+        @keyframes sail-across-mobile {
+          0% { transform: translateX(50px) translateY(0px) rotate(0deg); }
+          25% { transform: translateX(-25vw) translateY(-3px) rotate(1deg); }
+          50% { transform: translateX(-50vw) translateY(-6px) rotate(-1deg); }
+          75% { transform: translateX(-75vw) translateY(-3px) rotate(1deg); }
+          100% { transform: translateX(calc(-100vw - 150px)) translateY(0px) rotate(0deg); }
+        }
+        
+        @keyframes sail-across-desktop {
           0% { transform: translateX(100px) translateY(0px) rotate(0deg); }
           25% { transform: translateX(-25vw) translateY(-6px) rotate(1deg); }
           50% { transform: translateX(-50vw) translateY(-12px) rotate(-1deg); }
@@ -138,8 +146,12 @@ export default function SignInPage() {
         
 
         .animate-float { animation: float 6s ease-in-out infinite; }
-        .animate-sail-across { animation: sail-across 45s linear infinite; }
+        .animate-sail-across { animation: sail-across-mobile 45s linear infinite; }
         .animate-fly-plane { animation: fly-plane 30s linear infinite 20s; }
+        
+        @media (min-width: 640px) {
+          .animate-sail-across { animation: sail-across-desktop 45s linear infinite; }
+        }
         
         .wave {
           position: absolute;
