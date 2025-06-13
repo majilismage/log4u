@@ -6,6 +6,8 @@ import { LoadingProvider } from "@/lib/LoadingContext"
 import { ProcessingModal } from "@/components/ProcessingModal"
 import { Providers } from "@/components/providers"
 import AuthWrapper from "@/components/auth/AuthWrapper"
+import { Footer } from "@/components/Footer"
+import { Suspense } from "react"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -32,13 +34,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.className} flex flex-col min-h-screen`}>
         <Providers>
           <LoadingProvider>
-            <AuthWrapper>{children}</AuthWrapper>
+            <div className="flex-grow">
+              <AuthWrapper>{children}</AuthWrapper>
+            </div>
             <ProcessingModal />
           </LoadingProvider>
         </Providers>
+        <Suspense>
+          <Footer />
+        </Suspense>
       </body>
     </html>
   )

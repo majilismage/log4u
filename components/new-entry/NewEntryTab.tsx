@@ -246,92 +246,131 @@ export function NewEntryTab() {
 
   return (
     <Card>
-      <CardContent className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="departureDate">Departure Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !departureDate && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {departureDate ? format(departureDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={departureDate}
-                    onSelect={(date) => date && setDepartureDate(date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+      <CardContent className="p-4 sm:p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Journey Dates Section */}
+          <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-lg">
+                <CalendarIcon className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Dates</h3>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="arrivalDate">Arrival Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !arrivalDate && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {arrivalDate ? format(arrivalDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={arrivalDate}
-                    onSelect={(date) => date && setArrivalDate(date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <LocationAutocomplete
-              label="From"
-              cityValue={fromTown}
-              countryValue={fromCountry}
-              latValue={fromLat}
-              lngValue={fromLng}
-              onCityChange={setFromTown}
-              onCountryChange={setFromCountry}
-              onLatChange={setFromLat}
-              onLngChange={setFromLng}
-              placeholder="Town/City"
-              required
-            />
-
-            <LocationAutocomplete
-              label="To"
-              cityValue={toTown}
-              countryValue={toCountry}
-              latValue={toLat}
-              lngValue={toLng}
-              onCityChange={setToTown}
-              onCountryChange={setToCountry}
-              onLatChange={setToLat}
-              onLngChange={setToLng}
-              placeholder="Town/City"
-              required
-            />
-
-            <div className="col-span-2 grid grid-cols-3 gap-4">
+            
+            <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
-                <Label htmlFor="distance">Distance</Label>
+                <Label htmlFor="departureDate" className="text-base font-medium">Departure Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-12 px-4 text-base",
+                        !departureDate && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-3 h-5 w-5" />
+                      {departureDate ? format(departureDate, "PPP") : <span>Pick departure date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={departureDate}
+                      onSelect={(date) => date && setDepartureDate(date)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="arrivalDate" className="text-base font-medium">Arrival Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-12 px-4 text-base",
+                        !arrivalDate && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-3 h-5 w-5" />
+                      {arrivalDate ? format(arrivalDate, "PPP") : <span>Pick arrival date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={arrivalDate}
+                      onSelect={(date) => date && setArrivalDate(date)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          </div>
+
+          {/* Journey Route Section */}
+          <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                <svg className="h-4 w-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Route</h3>
+            </div>
+            
+            <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
+              <LocationAutocomplete
+                label="From"
+                cityValue={fromTown}
+                countryValue={fromCountry}
+                latValue={fromLat}
+                lngValue={fromLng}
+                onCityChange={setFromTown}
+                onCountryChange={setFromCountry}
+                onLatChange={setFromLat}
+                onLngChange={setFromLng}
+                placeholder="Town/City"
+                required
+                className="space-y-3"
+              />
+
+              <LocationAutocomplete
+                label="To"
+                cityValue={toTown}
+                countryValue={toCountry}
+                latValue={toLat}
+                lngValue={toLng}
+                onCityChange={setToTown}
+                onCountryChange={setToCountry}
+                onLatChange={setToLat}
+                onLngChange={setToLng}
+                placeholder="Town/City"
+                required
+                className="space-y-3"
+              />
+            </div>
+          </div>
+
+          {/* Journey Details Section */}
+          <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 bg-green-50 dark:bg-green-950 rounded-lg">
+                <svg className="h-4 w-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Details</h3>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Distance - full width on mobile */}
+              <div>
                 <Input
                   id="distance"
                   type="number"
@@ -341,12 +380,12 @@ export function NewEntryTab() {
                   onChange={(e) => setDistance(e.target.value)}
                   placeholder="Distance"
                   required
-                  className="w-full"
+                  className="h-12 px-4 text-base"
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="avgSpeed">Avg Speed (knots)</Label>
+              
+              {/* Speed inputs - stack on mobile, side by side on larger screens */}
+              <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
                 <Input
                   id="avgSpeed"
                   type="number"
@@ -354,14 +393,11 @@ export function NewEntryTab() {
                   min="0"
                   value={avgSpeed}
                   onChange={(e) => setAvgSpeed(e.target.value)}
-                  placeholder="Avg speed"
+                  placeholder="Average speed (knots)"
                   required
-                  className="w-full"
+                  className="h-12 px-4 text-base"
                 />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="maxSpeed">Max Speed (knots)</Label>
                 <Input
                   id="maxSpeed"
                   type="number"
@@ -369,62 +405,88 @@ export function NewEntryTab() {
                   min="0"
                   value={maxSpeed}
                   onChange={(e) => setMaxSpeed(e.target.value)}
-                  placeholder="Max speed"
+                  placeholder="Maximum speed (knots)"
                   required
-                  className="w-full"
+                  className="h-12 px-4 text-base"
                 />
               </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
+          {/* Notes Section */}
+          <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 bg-amber-50 dark:bg-amber-950 rounded-lg">
+                <svg className="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Notes</h3>
+            </div>
+            
             <Textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add your travel notes here"
-              className="min-h-[120px]"
+              placeholder="Add your travel notes here..."
+              className="min-h-[120px] p-4 text-base resize-none"
             />
           </div>
 
-          <div className="space-y-4">
-            <Label htmlFor="media">Upload Media (Images & Videos)</Label>
-            <div className="flex flex-col items-center justify-center w-full">
-              <label
-                htmlFor="media"
-                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted/80 transition-colors"
-              >
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <svg className="w-8 h-8 mb-4 text-muted-foreground" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
-                  </svg>
-                  <p className="mb-2 text-sm text-muted-foreground">
-                    <span className="font-semibold">Click to upload</span> or drag and drop
-                  </p>
-                  <p className="text-xs text-muted-foreground">Images and videos up to 100MB</p>
-                </div>
-                <Input
-                  id="media"
-                  type="file"
-                  accept="image/*, video/*"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-              </label>
+          {/* Media Upload Section */}
+          <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                <svg className="h-4 w-4 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Media</h3>
             </div>
-            {selectedFiles.length > 0 && (
-              <FilePreview
-                files={selectedFiles}
-                onRemove={removeFile}
-              />
-            )}
+            
+            <div className="space-y-4">
+              <div className="flex flex-col items-center justify-center w-full">
+                <label
+                  htmlFor="media"
+                  className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-border rounded-lg cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors touch-manipulation"
+                >
+                  <div className="flex flex-col items-center justify-center py-6 px-4">
+                    <svg className="w-10 h-10 mb-4 text-muted-foreground" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                    </svg>
+                    <p className="mb-2 text-base text-muted-foreground text-center">
+                      <span className="font-semibold">Tap to upload</span> or drag and drop
+                    </p>
+                    <p className="text-sm text-muted-foreground text-center">Images and videos up to 100MB</p>
+                  </div>
+                  <Input
+                    id="media"
+                    type="file"
+                    accept="image/*, video/*"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              
+              {selectedFiles.length > 0 && (
+                <div className="pt-2">
+                  <FilePreview
+                    files={selectedFiles}
+                    onRemove={removeFile}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
-          <Button type="submit" className="w-full">
-            Save Entry
-          </Button>
+          {/* Submit Button */}
+          <div className="pt-4">
+            <Button type="submit" className="w-full h-12 text-base font-semibold">
+              Save Journey Entry
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>
