@@ -1,6 +1,6 @@
 import type React from "react"
 import Link from "next/link"
-import { PrivacyPolicyModal, TermsOfUseModal } from "./PrivacyPolicyModal"
+import { PrivacyPolicyModal, TermsOfUseModal } from "./LegalModals"
 
 export function Footer() {
   return (
@@ -13,7 +13,9 @@ export function Footer() {
           <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2" aria-label="Footer">
             <PrivacyPolicyModal />
             <TermsOfUseModal />
-            <span className="text-sm text-muted-foreground">Contact Info</span>
+            <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Contact Us
+            </Link>
             <span className="text-sm text-muted-foreground">About Us</span>
           </nav>
         </div>
