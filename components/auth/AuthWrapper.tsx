@@ -15,7 +15,7 @@ const AuthWrapper = ({ children }: AuthWrapperProps) => {
   const pathname = usePathname();
 
   // Define public routes that don't require authentication
-  const isPublicRoute = pathname.startsWith("/auth") || pathname === "/contact";
+  const isPublicRoute = pathname.startsWith("/auth") || pathname === "/contact" || pathname === "/about";
 
   useEffect(() => {
     // If it's not a public route and user is unauthenticated, redirect them
