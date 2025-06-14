@@ -3,12 +3,23 @@ import Link from "next/link"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, Users, Shield, Globe, Camera, BookOpen, Rocket } from "lucide-react"
+import { MapPin, Users, Shield, Globe, Camera, BookOpen, Rocket, Home } from "lucide-react"
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <div className="container mx-auto px-4 py-12 md:px-6 lg:px-8">
+        
+        {/* Home Navigation */}
+        <div className="mb-8">
+          <Link 
+            href="/"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
+          >
+            <Home className="h-5 w-5 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-medium">Back to WanderNote</span>
+          </Link>
+        </div>
         
         {/* Hero Section */}
         <div className="text-center mb-16">
@@ -34,9 +45,15 @@ export default function AboutPage() {
               href="https://3g-international.com/" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+              className="inline-flex items-center font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
             >
-              3GIS<sup>™</sup>
+              <Image 
+                src="/3gis_white.png" 
+                alt="3GIS" 
+                width={32} 
+                height={16} 
+                className="inline-block"
+              />
             </Link>
           </div>
         </div>
@@ -136,13 +153,30 @@ export default function AboutPage() {
         {/* About 3G International */}
         <Card className="mb-16 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 border-slate-200 dark:border-slate-600">
           <CardContent className="p-8 md:p-12">
-                         <h2 className="text-2xl md:text-3xl font-bold mb-6 text-center">About 3GIS<sup>™</sup></h2>
+                         <h2 className="text-2xl md:text-3xl font-bold mb-6 text-center flex items-center justify-center gap-2">
+               About 
+               <Image 
+                 src="/3gis_white.png" 
+                 alt="3GIS" 
+                 width={48} 
+                 height={24} 
+                 className="inline-block"
+               />
+             </h2>
              <div className="max-w-4xl mx-auto">
                <p className="text-lg text-muted-foreground leading-relaxed mb-6 text-center">
                  <strong className="text-foreground">Redefining Digital Excellence.</strong> Where innovation meets execution across industries.
                </p>
                <p className="text-muted-foreground leading-relaxed mb-6">
-                 WanderNote is proudly developed by <Link href="https://3g-international.com/" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">3GIS<sup>™</sup></Link>, 
+                 WanderNote is proudly developed by <Link href="https://3g-international.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                   <Image 
+                     src="/3gis_white.png" 
+                     alt="3GIS" 
+                     width={28} 
+                     height={14} 
+                     className="inline-block"
+                   />
+                 </Link> - 
                  a technology company that operates at the intersection of innovation and practical solutions. 
                  We specialize in creating applications that don't just meet expectations, they redefine them.
                </p>

@@ -2,13 +2,14 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Mail, MapPin, Building2, Send, Loader2, Shield } from "lucide-react"
+import { Mail, MapPin, Building2, Send, Loader2, Shield, Home } from "lucide-react"
 
 interface ContactFormData {
   name: string
@@ -108,6 +109,9 @@ export default function ContactPage() {
   }
 
   useEffect(() => {
+    // Scroll to top when page loads
+    window.scrollTo(0, 0)
+    
     setMounted(true)
     const now = Date.now()
     setPageLoadTime(now)
@@ -351,6 +355,17 @@ export default function ContactPage() {
     <main className="container mx-auto p-4 md:p-6 lg:p-8">
       <div className="flex w-full flex-col items-center">
         <div className="w-full max-w-4xl">
+          {/* Home Navigation */}
+          <div className="mb-8">
+            <Link 
+              href="/"
+              className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
+            >
+              <Home className="h-5 w-5 group-hover:scale-110 transition-transform" />
+              <span className="text-sm font-medium">Back to WanderNote</span>
+            </Link>
+          </div>
+          
           {/* Page Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold tracking-tight mb-4">Contact Us</h1>
