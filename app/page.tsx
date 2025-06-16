@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, Users, Shield, Globe, Camera, BookOpen, Rocket, Home } from "lucide-react"
+import { SignInButton } from "@/components/auth/SignInButton"
 
 export default function HomePage() {
   return (
@@ -11,7 +12,7 @@ export default function HomePage() {
       <div className="container mx-auto px-4 py-12 md:px-6 lg:px-8">
         
         {/* Hero Section */}
-        <div className="text-center mb-16 pt-12">
+        <div className="text-center mb-8 pt-12">
           <div className="flex flex-col items-center justify-center mb-6">
             <Image 
               src="/wandernote-logo.png" 
@@ -28,7 +29,7 @@ export default function HomePage() {
           <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto">
             Your personal digital travel journal, where every adventure becomes a lasting memory
           </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-8">
             <span>Crafted by</span>
             <Link 
               href="https://3g-international.com/" 
@@ -44,6 +45,11 @@ export default function HomePage() {
                 className="inline-block"
               />
             </Link>
+          </div>
+
+          {/* Sign In Button */}
+          <div className="max-w-sm mx-auto">
+            <SignInButton providerId="google" providerName="Google" />
           </div>
         </div>
 
