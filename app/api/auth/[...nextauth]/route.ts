@@ -98,6 +98,19 @@ export const authOptions: AuthOptions = {
       
       return true
     },
+
+    async redirect({ url, baseUrl }) {
+      // If the URL is a callback URL, redirect to dashboard
+      if (url.includes('/api/auth/callback')) {
+        return `${baseUrl}/dashboard`
+      }
+      // Allows relative callback URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`
+      // Allows callback URLs on the same origin
+      else if (new URL(url).origin === baseUrl) return url
+      // Default redirect to dashboard for successful sign-ins
+      return `${baseUrl}/dashboard`
+    },
     
     async session({ session, user }) {
       if (session.user) {

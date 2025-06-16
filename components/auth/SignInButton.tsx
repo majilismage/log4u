@@ -6,7 +6,7 @@ import { FaGoogle } from "react-icons/fa"
 
 export function SignInButton({ providerId, providerName }: { providerId: string, providerName: string }) {
   const handleSignIn = () => {
-    signIn(providerId, { callbackUrl: "/" })
+    signIn(providerId, { callbackUrl: "/dashboard" })
   }
 
   return (
