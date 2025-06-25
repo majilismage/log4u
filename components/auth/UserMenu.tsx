@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -13,16 +13,70 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import { authLogger } from "@/lib/auth-logger";
 
 const UserMenu = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const lastSessionRef = useRef<any>(null);
+
+  // Log session changes in UserMenu
+  useEffect(() => {
+    if (JSON.stringify(lastSessionRef.current) !== JSON.stringify(session)) {
+      authLogger.info("UserMenu session changed", {
+        status,
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userId: session?.user?.id,
+        userEmail: session?.user?.email,
+        userName: session?.user?.name,
+        hasAccessToken: !!(session as any)?.accessToken,
+        hasRefreshToken: !!(session as any)?.refreshToken,
+        timestamp: Date.now()
+      }, 'USER_MENU');
+      lastSessionRef.current = session;
+    }
+  }, [session, status]);
+
+  const handleSignOut = async () => {
+    try {
+      authLogger.info("User initiated sign-out", {
+        userId: session?.user?.id,
+        userEmail: session?.user?.email,
+        timestamp: Date.now()
+      }, 'USER_MENU');
+
+      await signOut({ callbackUrl: "/auth/signin" });
+
+      authLogger.info("Sign-out completed", {
+        timestamp: Date.now()
+      }, 'USER_MENU');
+    } catch (error) {
+      authLogger.error("Sign-out error", error, 'USER_MENU');
+    }
+  };
+
+  const handleSettingsNavigation = () => {
+    authLogger.info("User navigating to settings", {
+      userId: session?.user?.id,
+      timestamp: Date.now()
+    }, 'USER_MENU');
+    router.push("/settings");
+  };
 
   if (status === "loading") {
+    authLogger.debug("UserMenu showing loading spinner", {
+      timestamp: Date.now()
+    }, 'USER_MENU');
     return <LoadingSpinner size="sm" />;
   }
 
   if (status === "unauthenticated" || !session?.user) {
+    authLogger.debug("UserMenu rendering null (unauthenticated)", {
+      status,
+      hasSession: !!session,
+      timestamp: Date.now()
+    }, 'USER_MENU');
     return null; // Or a sign-in button, but for now we'll render nothing.
   }
 
@@ -49,10 +103,10 @@ const UserMenu = () => {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => router.push("/settings")}>
+        <DropdownMenuItem onSelect={handleSettingsNavigation}>
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/auth/signin" })}>
+        <DropdownMenuItem onSelect={handleSignOut}>
           Sign Out
         </DropdownMenuItem>
       </DropdownMenuContent>

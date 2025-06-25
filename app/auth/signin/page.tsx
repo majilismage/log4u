@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { SignInButton } from "@/components/auth/SignInButton"
 import Image from "next/image"
+import { authLogger } from "@/lib/auth-logger"
 
 
 export default function SignInPage() {
@@ -21,8 +22,27 @@ export default function SignInPage() {
   > | null>(null)
 
   useEffect(() => {
+    // Log signin page visit
+    authLogger.info("Sign-in page visited", {
+      userAgent: navigator.userAgent,
+      url: window.location.href,
+      referrer: document.referrer,
+      timestamp: Date.now()
+    }, 'SIGNIN_PAGE');
+
     const fetchProviders = async () => {
+      authLogger.info("Fetching OAuth providers", {
+        timestamp: Date.now()
+      }, 'SIGNIN_PAGE');
+
       const res = await getProviders()
+      
+      authLogger.info("OAuth providers fetched", {
+        providerCount: res ? Object.keys(res).length : 0,
+        providerNames: res ? Object.values(res).map(p => p.name) : [],
+        timestamp: Date.now()
+      }, 'SIGNIN_PAGE');
+
       setProviders(res)
     }
     fetchProviders()

@@ -3,10 +3,30 @@
 import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { FaGoogle } from "react-icons/fa"
+import { authLogger } from "@/lib/auth-logger"
 
 export function SignInButton({ providerId, providerName }: { providerId: string, providerName: string }) {
-  const handleSignIn = () => {
-    signIn(providerId, { callbackUrl: "/dashboard" })
+  const handleSignIn = async () => {
+    try {
+      authLogger.signInAttempt(providerId, "/dashboard");
+      authLogger.info("User clicked sign-in button", {
+        providerId,
+        providerName,
+        callbackUrl: "/dashboard",
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      }, 'SIGNIN_BUTTON');
+
+      const result = await signIn(providerId, { callbackUrl: "/dashboard" });
+      
+      authLogger.info("Sign-in method called", {
+        providerId,
+        result,
+        timestamp: Date.now()
+      }, 'SIGNIN_BUTTON');
+    } catch (error) {
+      authLogger.error("Sign-in button error", error, 'SIGNIN_BUTTON');
+    }
   }
 
   return (

@@ -7,7 +7,6 @@ import { ProcessingModal } from "@/components/ProcessingModal"
 import { Providers } from "@/components/providers"
 import AuthWrapper from "@/components/auth/AuthWrapper"
 import { Footer } from "@/components/Footer"
-import { Suspense } from "react"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -43,9 +42,7 @@ export default function RootLayout({
             <ProcessingModal />
           </LoadingProvider>
         </Providers>
-        <Suspense>
-          <Footer />
-        </Suspense>
+        <Footer />
       </body>
     </html>
   )

@@ -139,7 +139,7 @@ export default function SettingsPage() {
     }
 
     return (
-      <Button onClick={createHandler} disabled={loading || (item && !item.error)}>
+      <Button onClick={createHandler} disabled={loading || Boolean(item && !item.error)}>
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
