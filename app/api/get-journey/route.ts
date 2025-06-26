@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GoogleSpreadsheet } from 'google-spreadsheet';
-import { JWT } from 'google-auth-library';
+import { getAuthenticatedClient } from '@/lib/google-api-client';
+import { google } from 'googleapis';
 import { logger } from '@/lib/logger';
 
 interface JourneyDetails {
@@ -28,36 +28,51 @@ export async function GET(request: Request) {
 
     logger.info('Starting journey details fetch', { journeyId });
 
-    // Create JWT client
-    const serviceAccountAuth = new JWT({
-      email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
-      key: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.split('\\n').join('\n'),
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets.readonly',
-      ],
+    // Get authenticated client using user's OAuth tokens
+    const { auth, googleSheetsId } = await getAuthenticatedClient();
+
+    if (!googleSheetsId) {
+      logger.error('User has no Google Sheet ID configured');
+      return NextResponse.json(
+        { error: 'Google Sheet not configured. Please set up your spreadsheet in settings.' },
+        { status: 400 }
+      );
+    }
+
+    logger.debug('Using user\'s Google Sheet', { googleSheetsId });
+
+    // Create Sheets API client with user's OAuth token
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // Get all rows from the sheet
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: googleSheetsId,
+      range: 'A2:R', // Assuming headers are in row 1, data starts from row 2
     });
 
-    logger.debug('Created JWT client for Google Sheets');
+    const rows = response.data.values;
+    if (!rows || rows.length === 0) {
+      logger.info('No data found in user\'s sheet');
+      return NextResponse.json(
+        { error: 'No journey data found' },
+        { status: 404 }
+      );
+    }
 
-    // Initialize the sheet
-    const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEETS_SHEET_ID!, serviceAccountAuth);
-    
-    // Load the document properties and sheets
-    await doc.loadInfo();
-    logger.debug('Loaded Google Sheet', { sheetTitle: doc.title });
-
-    // Get the first sheet
-    const sheet = doc.sheetsByIndex[0];
-    logger.debug('Accessed sheet', { sheetTitle: sheet.title });
-
-    // Load all rows
-    const rows = await sheet.getRows();
     logger.debug('Loaded sheet rows', { rowCount: rows.length });
 
-    // Find the row with matching journey ID
-    const journeyRow = rows.find(row => row.get('Journey ID') === journeyId);
+    // Column headers based on your sheet structure
+    const columnHeaders = [
+      'Journey ID', 'Departure Date', 'Arrival Date', 'From Town', 'From Country',
+      'From Latitude', 'From Longitude', 'To Town', 'To Country', 'To Latitude',
+      'To Longitude', 'Distance', 'Average Speed', 'Max Speed', 'Notes',
+      'Images Link', 'Videos Link', 'Timestamp'
+    ];
 
-    if (!journeyRow) {
+    // Find the row with matching journey ID (assuming Journey ID is in column A, index 0)
+    const journeyRowData = rows.find(row => row[0] === journeyId);
+
+    if (!journeyRowData) {
       logger.error('Journey not found', { journeyId });
       return NextResponse.json(
         { error: 'Journey not found' },
@@ -65,14 +80,15 @@ export async function GET(request: Request) {
       );
     }
 
+    // Map the row data to the journey object
     const journey: JourneyDetails = {
-      journeyId: journeyRow.get('Journey ID'),
-      departureDate: journeyRow.get('Departure Date'),
-      arrivalDate: journeyRow.get('Arrival Date'),
-      fromTown: journeyRow.get('From Town'),
-      fromCountry: journeyRow.get('From Country'),
-      toTown: journeyRow.get('To Town'),
-      toCountry: journeyRow.get('To Country'),
+      journeyId: journeyRowData[0] || '',
+      departureDate: journeyRowData[1] || '',
+      arrivalDate: journeyRowData[2] || '',
+      fromTown: journeyRowData[3] || '',
+      fromCountry: journeyRowData[4] || '',
+      toTown: journeyRowData[7] || '',
+      toCountry: journeyRowData[8] || '',
     };
 
     logger.info('Journey details fetch completed', { journeyId });

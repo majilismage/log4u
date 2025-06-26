@@ -21,7 +21,7 @@ export const authOptions: AuthOptions = {
           access_type: "offline",
           response_type: "code",
           scope:
-            "openid email profile https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
+            "openid email profile https://www.googleapis.com/auth/drive.file",
         },
       },
     }),
@@ -155,7 +155,6 @@ export const authOptions: AuthOptions = {
         }
 
         const requiredScopes = [
-          "https://www.googleapis.com/auth/spreadsheets",
           "https://www.googleapis.com/auth/drive.file"
         ]
         

@@ -173,7 +173,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8 py-8">
       <div className="flex items-center justify-between px-4 sm:px-0">
         <h1 className="text-3xl font-bold">Settings</h1>
-        <Button variant="outline" onClick={() => router.push("/")}>
+        <Button variant="outline" onClick={() => router.push("/dashboard")}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to App
         </Button>

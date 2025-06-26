@@ -33,6 +33,8 @@ interface TravelEntry {
 export function NewEntryTab() {
   const [departureDate, setDepartureDate] = useState<Date>(new Date())
   const [arrivalDate, setArrivalDate] = useState<Date>(new Date())
+  const [departureDateOpen, setDepartureDateOpen] = useState(false)
+  const [arrivalDateOpen, setArrivalDateOpen] = useState(false)
   const [journeyId, setJourneyId] = useState<string>("")
   const [fromTown, setFromTown] = useState("")
   const [fromCountry, setFromCountry] = useState("")
@@ -260,7 +262,7 @@ export function NewEntryTab() {
             <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="departureDate" className="text-base font-medium">Departure Date</Label>
-                <Popover>
+                <Popover open={departureDateOpen} onOpenChange={setDepartureDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -277,7 +279,12 @@ export function NewEntryTab() {
                     <Calendar
                       mode="single"
                       selected={departureDate}
-                      onSelect={(date) => date && setDepartureDate(date)}
+                      onSelect={(date) => {
+                        if (date) {
+                          setDepartureDate(date)
+                          setDepartureDateOpen(false)
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -286,7 +293,7 @@ export function NewEntryTab() {
 
               <div className="space-y-2">
                 <Label htmlFor="arrivalDate" className="text-base font-medium">Arrival Date</Label>
-                <Popover>
+                <Popover open={arrivalDateOpen} onOpenChange={setArrivalDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -303,7 +310,12 @@ export function NewEntryTab() {
                     <Calendar
                       mode="single"
                       selected={arrivalDate}
-                      onSelect={(date) => date && setArrivalDate(date)}
+                      onSelect={(date) => {
+                        if (date) {
+                          setArrivalDate(date)
+                          setArrivalDateOpen(false)
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>

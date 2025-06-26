@@ -24,16 +24,6 @@ GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 DATABASE_URL=your-neon-database-url
 ```
 
-### Legacy Google Service Account (for backward compatibility during transition)
-```bash
-# Keep these for now until we fully migrate existing API endpoints
-GOOGLE_SHEETS_PRIVATE_KEY="your-private-key"
-GOOGLE_SHEETS_CLIENT_EMAIL="your-service-account-email"
-GOOGLE_SHEETS_SHEET_ID="your-sheet-id"
-GOOGLE_DRIVE_PRIVATE_KEY="your-private-key"
-GOOGLE_DRIVE_CLIENT_EMAIL="your-service-account-email"
-```
-
 ## Production Environment Variables (Vercel)
 
 For production deployment on Vercel, set these environment variables:
@@ -60,10 +50,20 @@ Or use this online generator: https://generate-secret.vercel.app/32
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select existing project
-3. Enable Google+ API and Google Drive API
+3. Enable Google Drive API
 4. Create OAuth 2.0 credentials
 5. Add authorized redirect URIs:
    - Local: `http://localhost:3000/api/auth/callback/google`
    - Production: `https://wandernote.vercel.app/api/auth/callback/google`
 6. Configure OAuth consent screen for external users
-7. Add required scopes: `spreadsheets`, `drive.file` 
+7. Add required scope: `drive.file` (allows creating and accessing app-created files)
+
+## OAuth Scope Details
+
+The application uses the `drive.file` scope which provides:
+- Permission to create new Google Sheets and Drive files
+- Access to files created by the application
+- Access to files explicitly shared with the application by users
+- Enhanced security through per-file access control
+
+This scope is non-sensitive and does not require Google's app verification process. 
