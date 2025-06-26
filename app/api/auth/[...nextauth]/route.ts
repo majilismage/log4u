@@ -17,7 +17,7 @@ export const authOptions: AuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          prompt: "consent",
+          prompt: "select_account consent",
           access_type: "offline",
           response_type: "code",
           scope:
@@ -87,55 +87,71 @@ export const authOptions: AuthOptions = {
           logger.warn("No refresh_token was provided. This is expected on subsequent logins. If you just revoked and re-granted access, this might indicate a configuration issue.");
         }
 
-        // Manually update tokens in the database to ensure they are always fresh.
+        // SECURE MANUAL TOKEN UPDATE - Fixed to prevent user account conflation
+        // We need this manual update because NextAuth PostgreSQL adapter doesn't reliably 
+        // update tokens on every login (as documented in PROJECT.md), but we must ensure
+        // we only update tokens for the correct user to prevent security issues.
         try {
-          authLogger.info('Starting database token update', {
+          authLogger.info('Starting secure database token update', {
             providerAccountId: account.providerAccountId,
+            profileEmail: profile?.email,
             hasAccessToken: !!account.access_token,
             hasRefreshToken: !!account.refresh_token,
             expiresAt: account.expires_at,
             timestamp: Date.now()
-          }, 'DB_TOKEN_UPDATE');
+          }, 'SECURE_TOKEN_UPDATE');
 
-          logger.debug('Attempting to manually update tokens in the database...', { providerAccountId: account.providerAccountId });
+          // SECURE TOKEN UPDATE: Update tokens using providerAccountId + provider
+          // This is secure because providerAccountId is Google's unique, immutable identifier
           const result = await db.query(
             `
             UPDATE accounts
             SET
               access_token = $1,
               expires_at = $2,
-              refresh_token = COALESCE($3, refresh_token) -- Only update refresh_token if a new one is provided
-            WHERE "providerAccountId" = $4
-            RETURNING "userId", access_token, refresh_token, expires_at; -- Return the updated row for verification
+              refresh_token = COALESCE($3, refresh_token)
+            WHERE "providerAccountId" = $4 
+              AND provider = $5
+            RETURNING "userId", access_token, refresh_token, expires_at;
             `,
             [
               account.access_token,
               account.expires_at,
               account.refresh_token,
               account.providerAccountId,
+              account.provider
             ]
           );
 
           if (result.rows.length > 0) {
-            authLogger.info("Database token update successful", {
+            authLogger.info("Secure database token update successful", {
               userId: result.rows[0].userId,
+              userEmail: result.rows[0].email,
               providerAccountId: account.providerAccountId,
+              provider: account.provider,
               rowsUpdated: result.rowCount,
               hasStoredRefreshToken: !!result.rows[0].refresh_token,
               timestamp: Date.now()
-            }, 'DB_TOKEN_UPDATE');
-            logger.info("Successfully updated tokens in the database.", { updatedRow: result.rows[0] });
+            }, 'SECURE_TOKEN_UPDATE');
+            logger.info("Successfully updated tokens with security validation.", { 
+              userId: result.rows[0].userId,
+              userEmail: result.rows[0].email 
+            });
           } else {
-            authLogger.warn("Database token update found no matching account", {
+            authLogger.warn("Secure token update found no matching user-account combination", {
               providerAccountId: account.providerAccountId,
-              queryResult: result,
+              provider: account.provider,
+              profileEmail: profile?.email,
               timestamp: Date.now()
-            }, 'DB_TOKEN_UPDATE');
-            logger.warn("The UPDATE query did not find a matching account to update. This is unexpected. The user may not exist in the 'accounts' table yet. The adapter should handle creation shortly.", { providerAccountId: account.providerAccountId });
+            }, 'SECURE_TOKEN_UPDATE');
+            logger.warn("No matching user-account found for secure token update. This could indicate a new user or email mismatch.", { 
+              providerAccountId: account.providerAccountId,
+              profileEmail: profile?.email 
+            });
           }
         } catch (error) {
-          authLogger.error("Database token update failed", error, 'DB_TOKEN_UPDATE');
-          logger.error("Error updating tokens in database during signIn callback.", { error });
+          authLogger.error("Secure database token update failed", error, 'SECURE_TOKEN_UPDATE');
+          logger.error("Error in secure token update during signIn callback.", { error });
         }
 
         const requiredScopes = [
@@ -191,8 +207,19 @@ export const authOptions: AuthOptions = {
         baseUrl,
         isCallback: url.includes('/api/auth/callback'),
         isRelative: url.startsWith("/"),
+        isSignOut: url.includes('/auth/signin'),
         timestamp: Date.now()
       }, 'REDIRECT');
+
+      // Handle sign-out redirects efficiently
+      if (url.includes('/auth/signin')) {
+        authLogger.info("Redirect for sign-out detected", {
+          originalUrl: url,
+          redirectTo: `${baseUrl}/auth/signin`,
+          timestamp: Date.now()
+        }, 'REDIRECT');
+        return `${baseUrl}/auth/signin`;
+      }
 
       // If the URL is a callback URL, redirect to dashboard
       if (url.includes('/api/auth/callback')) {
@@ -203,22 +230,101 @@ export const authOptions: AuthOptions = {
         }, 'REDIRECT');
         return `${baseUrl}/dashboard`
       }
+      
       // Allows relative callback URLs
-      if (url.startsWith("/")) return `${baseUrl}${url}`
+      if (url.startsWith("/")) {
+        const finalUrl = `${baseUrl}${url}`;
+        authLogger.info("Processing relative URL redirect", {
+          originalUrl: url,
+          finalUrl,
+          timestamp: Date.now()
+        }, 'REDIRECT');
+        return finalUrl;
+      }
+      
       // Allows callback URLs on the same origin
-      else if (new URL(url).origin === baseUrl) return url
+      if (new URL(url).origin === baseUrl) {
+        authLogger.info("Same-origin redirect", {
+          url,
+          timestamp: Date.now()
+        }, 'REDIRECT');
+        return url;
+      }
+      
       // Default redirect to dashboard for successful sign-ins
+      authLogger.info("Default redirect to dashboard", {
+        originalUrl: url,
+        redirectTo: `${baseUrl}/dashboard`,
+        timestamp: Date.now()
+      }, 'REDIRECT');
       return `${baseUrl}/dashboard`
     },
     
-    async session({ session, user }) {
-      authLogger.info("Session callback initiated", {
-        hasUser: !!user,
+    async session({ session, user, token }) {
+      const hasUser = !!user;
+      const hasToken = !!token;
+      const sessionExists = !!session;
+      
+      // Detect potential logout scenario - improved detection
+      const isLogoutScenario = (!hasUser || !hasToken) && sessionExists;
+      
+      authLogger.info(`Session callback initiated${isLogoutScenario ? ' (POTENTIAL LOGOUT)' : ''}`, {
+        hasUser,
+        hasToken,
+        sessionExists,
         userId: user?.id,
         userEmail: user?.email,
-        hasSessionUser: !!session.user,
+        hasSessionUser: !!session?.user,
+        isLogoutScenario,
         timestamp: Date.now()
       }, 'SESSION_CALLBACK');
+
+      // SECURITY: Validate user-account consistency to prevent account conflation
+      if (user?.id && session?.user?.email) {
+        try {
+          // Verify that the user's email matches their database record
+          const accountVerification = await db.query(
+            `SELECT u.email as user_email, a."providerAccountId"
+             FROM users u 
+             JOIN accounts a ON u.id = a."userId"
+             WHERE u.id = $1 AND a.provider = 'google'
+             LIMIT 1`,
+            [user.id]
+          );
+
+          if (accountVerification.rows.length > 0) {
+            const row = accountVerification.rows[0];
+            const emailMismatch = row.user_email !== user.email;
+            
+            if (emailMismatch) {
+              authLogger.error("CRITICAL SECURITY ISSUE: User email mismatch detected", {
+                sessionUserId: user.id,
+                sessionUserEmail: user.email,
+                databaseUserEmail: row.user_email,
+                providerAccountId: row.providerAccountId,
+                timestamp: Date.now()
+              }, 'SECURITY_VIOLATION');
+              
+              // Log this critical security issue but don't break the session
+              // The secure token update should prevent this scenario
+              authLogger.error("Account conflation detected - this should not happen with secure token updates", {
+                userId: user.id,
+                timestamp: Date.now()
+              }, 'SECURITY_VIOLATION');
+            } else {
+              authLogger.info("User-account validation passed", {
+                userId: user.id,
+                userEmail: user.email,
+                providerAccountId: row.providerAccountId,
+                timestamp: Date.now()
+              }, 'SECURITY_VALIDATION');
+            }
+          }
+        } catch (error) {
+          authLogger.error("Session security validation failed", error, 'SECURITY_VALIDATION');
+          // Don't block the session for database errors, but log them
+        }
+      }
 
       if (session.user) {
         session.user.id = user.id

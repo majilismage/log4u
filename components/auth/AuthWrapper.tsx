@@ -20,8 +20,10 @@ const ProtectedRouteWrapper = ({ children }: { children: React.ReactNode }) => {
   // Log session status changes for protected routes
   useEffect(() => {
     if (lastStatusRef.current !== status) {
+      const isLogout = lastStatusRef.current === 'authenticated' && status === 'unauthenticated';
+      
       authLogger.sessionChange(status as any, session);
-      authLogger.info("AuthWrapper session status change", {
+      authLogger.info(`AuthWrapper session status change${isLogout ? ' (LOGOUT DETECTED)' : ''}`, {
         previousStatus: lastStatusRef.current,
         newStatus: status,
         pathname,
@@ -29,8 +31,19 @@ const ProtectedRouteWrapper = ({ children }: { children: React.ReactNode }) => {
         hasSession: !!session,
         userId: session?.user?.id,
         userEmail: session?.user?.email,
+        isLogout,
         timestamp: Date.now()
       }, 'AUTH_WRAPPER');
+
+      if (isLogout) {
+        authLogger.info("User logout detected in AuthWrapper", {
+          pathname,
+          previousStatus: lastStatusRef.current,
+          redirectWillOccur: true,
+          timestamp: Date.now()
+        }, 'LOGOUT_DETECTED');
+      }
+
       lastStatusRef.current = status;
     }
   }, [status, session, pathname]);

@@ -40,19 +40,116 @@ const UserMenu = () => {
 
   const handleSignOut = async () => {
     try {
+      console.log("handleSignOut function called");
+      const logoutStartTime = Date.now();
+      
+      // Store logout start in sessionStorage for debugging
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('logout-debug', JSON.stringify({
+          startTime: logoutStartTime,
+          userId: session?.user?.id,
+          userEmail: session?.user?.email,
+          timestamp: new Date().toISOString()
+        }));
+      }
+      
+      // Use specialized logout logging
+      authLogger.logoutInitiated(session?.user?.id || undefined, 'user_menu');
       authLogger.info("User initiated sign-out", {
         userId: session?.user?.id,
         userEmail: session?.user?.email,
+        userName: session?.user?.name,
+        logoutStartTime,
         timestamp: Date.now()
       }, 'USER_MENU');
 
-      await signOut({ callbackUrl: "/auth/signin" });
+      // Perform server-side cleanup first
+      authLogger.info("Starting server-side logout cleanup", {
+        userId: session?.user?.id,
+        timestamp: Date.now()
+      }, 'LOGOUT_CLEANUP');
 
-      authLogger.info("Sign-out completed", {
+      try {
+        const cleanupResponse = await fetch('/api/auth/clear-cache', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (cleanupResponse.ok) {
+          authLogger.info("Server-side cleanup completed", {
+            userId: session?.user?.id,
+            timestamp: Date.now()
+          }, 'LOGOUT_CLEANUP');
+        } else {
+          authLogger.warn("Server-side cleanup failed", {
+            status: cleanupResponse.status,
+            userId: session?.user?.id,
+            timestamp: Date.now()
+          }, 'LOGOUT_CLEANUP');
+        }
+      } catch (error) {
+        authLogger.warn("Server-side cleanup request failed", error, 'LOGOUT_CLEANUP');
+      }
+
+      // Perform client-side cleanup
+      authLogger.info("Starting client-side logout cleanup", {
+        userId: session?.user?.id,
+        timestamp: Date.now()
+      }, 'LOGOUT_CLEANUP');
+
+      // Clear any client-side auth session storage
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.removeItem('auth-session-id');
+          authLogger.info("Cleared client auth session storage", {
+            timestamp: Date.now()
+          }, 'LOGOUT_CLEANUP');
+        } catch (error) {
+          authLogger.warn("Failed to clear session storage", error, 'LOGOUT_CLEANUP');
+        }
+      }
+
+      // Call NextAuth signOut WITHOUT redirect first
+      authLogger.info("Calling NextAuth signOut (no redirect)", {
+        callbackUrl: "/auth/signin",
         timestamp: Date.now()
       }, 'USER_MENU');
+
+      await signOut({ 
+        callbackUrl: "/auth/signin",
+        redirect: false 
+      });
+
+      authLogger.info("NextAuth signOut completed - handling manual redirect", {
+        logoutDuration: Date.now() - logoutStartTime,
+        timestamp: Date.now()
+      }, 'USER_MENU');
+
+      // Give a brief moment for logs to be forwarded to server
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      authLogger.info("Manual redirect to sign-in page", {
+        finalLogoutDuration: Date.now() - logoutStartTime,
+        timestamp: Date.now()
+      }, 'USER_MENU');
+
+      // Manual redirect
+      window.location.href = '/auth/signin';
+
     } catch (error) {
-      authLogger.error("Sign-out error", error, 'USER_MENU');
+      authLogger.error("Sign-out error", {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        userId: session?.user?.id,
+        timestamp: Date.now()
+      }, 'USER_MENU');
+      
+      // Even if there's an error, try to redirect manually
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/signin';
+      }
     }
   };
 
@@ -106,7 +203,14 @@ const UserMenu = () => {
         <DropdownMenuItem onSelect={handleSettingsNavigation}>
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleSignOut}>
+        <DropdownMenuItem onSelect={() => {
+          console.log("Sign Out menu item clicked - starting logout process");
+          authLogger.info("Sign Out dropdown item clicked", {
+            userId: session?.user?.id,
+            timestamp: Date.now()
+          }, 'USER_MENU');
+          handleSignOut();
+        }}>
           Sign Out
         </DropdownMenuItem>
       </DropdownMenuContent>

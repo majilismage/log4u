@@ -50,6 +50,33 @@ class AuthLogger {
         : 'info';
       
       console[logMethod](`[AUTH-CLIENT-${timestamp}] ${context || 'AUTH'}: ${message}`, data || '');
+
+      // For critical logout events, also forward to server
+      const criticalContexts = ['LOGOUT', 'USER_MENU', 'LOGOUT_CLEANUP', 'SESSION'];
+      if (criticalContexts.includes(context || '')) {
+        this.forwardToServer(level, message, data, context, timestamp);
+      }
+    }
+  }
+
+  private async forwardToServer(level: string, message: string, data?: any, context?: string, clientTimestamp?: string) {
+    try {
+      await fetch('/api/auth/client-logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          level,
+          message,
+          data,
+          context,
+          clientTimestamp
+        })
+      });
+    } catch (error) {
+      // Silent fail - don't want to break logout flow
+      console.warn('Failed to forward log to server:', error);
     }
   }
 
@@ -145,6 +172,32 @@ class AuthLogger {
       rowCount: result?.rowCount,
       timestamp: Date.now()
     }, 'DB_TOKEN');
+  }
+
+  // Specialized logout tracking
+  logoutInitiated(userId?: string, trigger: 'user_menu' | 'auth_wrapper' | 'manual' = 'user_menu') {
+    this.info('Logout process initiated', {
+      userId,
+      trigger,
+      timestamp: Date.now()
+    }, 'LOGOUT');
+  }
+
+  logoutCompleted(userId?: string, duration?: number) {
+    this.info('Logout process completed', {
+      userId,
+      duration,
+      timestamp: Date.now()
+    }, 'LOGOUT');
+  }
+
+  cleanupOperation(operation: string, success: boolean, details?: any) {
+    this.info(`Cleanup operation: ${operation}`, {
+      operation,
+      success,
+      details,
+      timestamp: Date.now()
+    }, 'CLEANUP');
   }
 }
 
