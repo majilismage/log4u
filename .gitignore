@@ -190,7 +190,14 @@ fabric.properties
 # Ignore logs directory
 /logs/
 
+# Ignore notes directory
+/notes/
+
 # Project development files (contain sensitive info)
 PROJECT.md
 TO-DO.md
 TODO.md
+Notes/environment-setup.md
+Notes/folder-structure-refactor.md
+Notes/log_4_u_remediation_guide.md
+Notes/performance-optimizations.md

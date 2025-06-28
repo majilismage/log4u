@@ -104,6 +104,8 @@ const AuthWrapper = ({ children }: AuthWrapperProps) => {
   const isPublicRoute = pathname.startsWith("/auth") || 
                        pathname === "/contact" || 
                        pathname === "/" ||
+                       pathname === "/privacy-policy" ||
+                       pathname === "/terms-of-use" ||
                        pathname.startsWith("/.well-known/");
 
   // Immediately render children for public routes WITHOUT any auth processing

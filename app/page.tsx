@@ -42,7 +42,7 @@ export default function HomePage() {
                 alt="3GIS" 
                 width={32} 
                 height={16} 
-                className="inline-block"
+                className="inline-block invert dark:invert-0 transition-all"
               />
             </Link>
           </div>
@@ -155,7 +155,7 @@ export default function HomePage() {
                  alt="3GIS" 
                  width={48} 
                  height={24} 
-                 className="inline-block"
+                 className="inline-block invert dark:invert-0 transition-all"
                />
              </h2>
              <div className="max-w-4xl mx-auto">
@@ -169,7 +169,7 @@ export default function HomePage() {
                      alt="3GIS" 
                      width={28} 
                      height={14} 
-                     className="inline-block"
+                     className="inline-block invert dark:invert-0 transition-all"
                    />
                  </Link> - 
                  a technology company that operates at the intersection of innovation and practical solutions. 
