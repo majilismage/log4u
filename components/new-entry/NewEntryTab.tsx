@@ -369,7 +369,7 @@ export function NewEntryTab() {
             </div>
           </div>
 
-          {/* Journey Details Section */}
+          {/* Journey Telemetry Section */}
           <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center justify-center w-8 h-8 bg-green-50 dark:bg-green-950 rounded-lg">
@@ -377,7 +377,7 @@ export function NewEntryTab() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-foreground">Details</h3>
+              <h3 className="text-lg font-semibold text-foreground">Telemetry</h3>
             </div>
             
             <div className="space-y-4">

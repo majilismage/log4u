@@ -104,6 +104,7 @@ const AuthWrapper = ({ children }: AuthWrapperProps) => {
   const isPublicRoute = pathname.startsWith("/auth") || 
                        pathname === "/contact" || 
                        pathname === "/" ||
+                       pathname === "/map" ||
                        pathname === "/privacy-policy" ||
                        pathname === "/terms-of-use" ||
                        pathname.startsWith("/.well-known/");
