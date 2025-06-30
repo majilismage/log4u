@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -52,6 +52,34 @@ export function NewEntryTab() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const { setLoading, setProgress } = useLoading()
 
+  // Haversine formula to calculate distance between two points on Earth
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distance in kilometers
+  };
+
+  const updateDistanceIfPossible = (fromLat: string, fromLng: string, toLat: string, toLng: string) => {
+    if (fromLat && fromLng && toLat && toLng) {
+      const lat1 = parseFloat(fromLat);
+      const lng1 = parseFloat(fromLng);
+      const lat2 = parseFloat(toLat);
+      const lng2 = parseFloat(toLng);
+      
+      if (!isNaN(lat1) && !isNaN(lng1) && !isNaN(lat2) && !isNaN(lng2)) {
+        const distanceKm = calculateDistance(lat1, lng1, lat2, lng2);
+        const distanceNm = distanceKm * 0.539957; // Convert to nautical miles
+        setDistance(distanceNm.toFixed(2));
+      }
+    }
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
@@ -62,6 +90,11 @@ export function NewEntryTab() {
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
+
+  // Update distance whenever coordinates change
+  useEffect(() => {
+    updateDistanceIfPossible(fromLat, fromLng, toLat, toLng);
+  }, [fromLat, fromLng, toLat, toLng]);
 
   // Upload files and return the folder links (for images and videos)
   const uploadFiles = async (journeyId: string): Promise<{ imageFolderUrl?: string; videoFolderUrl?: string }> => {
@@ -350,6 +383,7 @@ export function NewEntryTab() {
                 placeholder="Town/City"
                 required
                 className="space-y-3"
+                showMapButton={true}
               />
 
               <LocationAutocomplete
@@ -365,6 +399,7 @@ export function NewEntryTab() {
                 placeholder="Town/City"
                 required
                 className="space-y-3"
+                showMapButton={true}
               />
             </div>
           </div>
@@ -390,7 +425,7 @@ export function NewEntryTab() {
                   min="0"
                   value={distance}
                   onChange={(e) => setDistance(e.target.value)}
-                  placeholder="Distance"
+                  placeholder="Distance (nautical miles) - auto-calculated from coordinates"
                   required
                   className="h-12 px-4 text-base"
                 />
