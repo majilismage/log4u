@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import HistoryEntryCard from "@/components/history/HistoryEntryCard"
 import type { JourneyEntry, JourneyEntryWithMedia, MediaItem } from "@/types/journey"
+import { useUnits } from "@/lib/UnitsContext"
+import { DEFAULT_UNIT_PREFERENCES } from "@/types/units"
+import { convertJourneyToUserUnits } from "@/lib/unit-conversions"
 
 // Define the expected structure of the media API response
 interface MediaApiResponse {
@@ -17,6 +20,7 @@ export function HistoryTab() {
   const [journeys, setJourneys] = useState<JourneyEntryWithMedia[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
+  const { unitPreferences } = useUnits()
 
   const fetchData = async () => {
     console.log('[HistoryTab] fetchData called');
@@ -42,24 +46,37 @@ export function HistoryTab() {
       console.log('[HistoryTab] Raw API response for media:', mediaResult);
 
       const rawHistoryData = historyResult.data || [];
-      const historyData: JourneyEntry[] = rawHistoryData.map((j: any) => ({
-        id: j.journeyId,
-        fromTown: j.fromTown,
-        fromCountry: j.fromCountry,
-        toTown: j.toTown,
-        toCountry: j.toCountry,
-        departureDate: j.departureDate,
-        arrivalDate: j.arrivalDate,
-        distance: String(j.distance || ''),
-        averageSpeed: String(j.averageSpeed || ''),
-        maxSpeed: String(j.maxSpeed || ''),
-        notes: j.notes,
-        fromLatitude: j.fromLat,
-        fromLongitude: j.fromLng,
-        toLatitude: j.toLat,
-        toLongitude: j.toLng,
-      }));
-      console.log('[HistoryTab] Mapped history data:', historyData);
+      const historyData: JourneyEntry[] = rawHistoryData.map((j: any) => {
+        // Convert journey data from stored units (default) to user's preferred units
+        const convertedData = convertJourneyToUserUnits(
+          {
+            distance: String(j.distance || '0'),
+            averageSpeed: String(j.averageSpeed || '0'),
+            maxSpeed: String(j.maxSpeed || '0'),
+          },
+          DEFAULT_UNIT_PREFERENCES, // Data stored in default units
+          unitPreferences // User's preferred units
+        );
+
+        return {
+          id: j.journeyId,
+          fromTown: j.fromTown,
+          fromCountry: j.fromCountry,
+          toTown: j.toTown,
+          toCountry: j.toCountry,
+          departureDate: j.departureDate,
+          arrivalDate: j.arrivalDate,
+          distance: convertedData.distance,
+          averageSpeed: convertedData.averageSpeed,
+          maxSpeed: convertedData.maxSpeed,
+          notes: j.notes,
+          fromLatitude: j.fromLat,
+          fromLongitude: j.fromLng,
+          toLatitude: j.toLat,
+          toLongitude: j.toLng,
+        };
+      });
+      console.log('[HistoryTab] Mapped and converted history data:', historyData);
 
       const mediaByJourneyId = mediaResult.mediaByJourneyId || {};
       console.log('[HistoryTab] Media grouped by Journey ID from API:', mediaByJourneyId);
@@ -84,7 +101,7 @@ export function HistoryTab() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [unitPreferences]);
 
   return (
     <Card className="dark:bg-neutral-800 border-slate-200 dark:border-neutral-700">

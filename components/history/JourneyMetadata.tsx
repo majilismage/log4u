@@ -9,6 +9,7 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns'; // Import date-fns functions
+import { useUnits } from '@/lib/UnitsContext';
 // import MiniMap from './MiniMap'; // Comment out MiniMap import
 
 // Props for JourneyMetadata should accept the fields it needs to display
@@ -68,6 +69,8 @@ const JourneyMetadata: React.FC<JourneyMetadataProps> = ({
   toLatitude,
   toLongitude,
 }) => {
+  const { unitConfig } = useUnits();
+  
   // Log received coordinate props and their types
   console.log('[JourneyMetadata] Received Props:', {
     fromLatitude,
@@ -173,18 +176,33 @@ const JourneyMetadata: React.FC<JourneyMetadataProps> = ({
       <hr className="border-slate-200 dark:border-neutral-700 my-3" />
 
       {/* Stats Row */}
-      <div className="flex items-center justify-around text-sm">
-        <div className="flex items-center space-x-1.5">
-          <Ruler className={`${iconSize} text-slate-500 dark:text-neutral-400 flex-shrink-0`} />
-          <span className="text-slate-700 dark:text-neutral-200">{distance}</span>
+      <div className="grid grid-cols-3 gap-3 text-xs">
+        <div className="text-center">
+          <div className="flex items-center justify-center space-x-1 mb-1">
+            <Ruler className={`${iconSize} text-slate-500 dark:text-neutral-400 flex-shrink-0`} />
+            <span className="text-slate-500 dark:text-neutral-400">Distance</span>
+          </div>
+          <div className="font-medium text-slate-700 dark:text-neutral-200">
+            {distance} {unitConfig.distance.symbol}
+          </div>
         </div>
-        <div className="flex items-center space-x-1.5">
-          <Gauge className={`${iconSize} text-slate-500 dark:text-neutral-400 flex-shrink-0`} />
-          <span className="text-slate-700 dark:text-neutral-200">{averageSpeed}</span>
+        <div className="text-center">
+          <div className="flex items-center justify-center space-x-1 mb-1">
+            <Gauge className={`${iconSize} text-slate-500 dark:text-neutral-400 flex-shrink-0`} />
+            <span className="text-slate-500 dark:text-neutral-400">Avg Speed</span>
+          </div>
+          <div className="font-medium text-slate-700 dark:text-neutral-200">
+            {averageSpeed} {unitConfig.speed.symbol}
+          </div>
         </div>
-        <div className="flex items-center space-x-1.5">
-          <TrendingUp className={`${iconSize} text-slate-500 dark:text-neutral-400 flex-shrink-0`} />
-          <span className="text-slate-700 dark:text-neutral-200">{maxSpeed}</span>
+        <div className="text-center">
+          <div className="flex items-center justify-center space-x-1 mb-1">
+            <TrendingUp className={`${iconSize} text-slate-500 dark:text-neutral-400 flex-shrink-0`} />
+            <span className="text-slate-500 dark:text-neutral-400">Max Speed</span>
+          </div>
+          <div className="font-medium text-slate-700 dark:text-neutral-200">
+            {maxSpeed} {unitConfig.speed.symbol}
+          </div>
         </div>
       </div>
     </div>

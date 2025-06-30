@@ -15,6 +15,10 @@ interface AuthenticatedClientResponse {
   userId: string;
   googleSheetsId?: string;
   googleDriveFolderId?: string;
+  unitPreferences?: {
+    speedUnit: string;
+    distanceUnit: string;
+  };
 }
 
 /**
@@ -111,14 +115,14 @@ export async function getAuthenticatedClient(): Promise<AuthenticatedClientRespo
   
   // 2. Fetch user's Google configuration from the 'user_google_config' table
   const configQuery = await db.query(
-    `SELECT "googleSheetsId", "googleDriveFolderId" FROM user_google_config WHERE "userId" = $1`,
+    `SELECT "googleSheetsId", "googleDriveFolderId", "speedUnit", "distanceUnit" FROM user_google_config WHERE "userId" = $1`,
     [userId]
   );
   
   // It's okay if the user has no config yet, so we don't throw an error here.
   const userConfig = configQuery.rows[0] || {};
-  const { googleSheetsId, googleDriveFolderId } = userConfig;
-  logger.debug(`getAuthenticatedClient: User config found`, { userId, hasSheet: !!googleSheetsId, hasDrive: !!googleDriveFolderId });
+  const { googleSheetsId, googleDriveFolderId, speedUnit, distanceUnit } = userConfig;
+  logger.debug(`getAuthenticatedClient: User config found`, { userId, hasSheet: !!googleSheetsId, hasDrive: !!googleDriveFolderId, hasUnits: !!(speedUnit && distanceUnit) });
 
   // 3. Create and configure the Google OAuth2 client
   const auth = new google.auth.OAuth2({
@@ -200,5 +204,9 @@ export async function getAuthenticatedClient(): Promise<AuthenticatedClientRespo
     userId,
     googleSheetsId,
     googleDriveFolderId,
+    unitPreferences: (speedUnit && distanceUnit) ? {
+      speedUnit,
+      distanceUnit,
+    } : undefined,
   };
 } 

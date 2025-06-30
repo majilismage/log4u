@@ -13,6 +13,7 @@ import { Loader2, CheckCircle, AlertTriangle, ExternalLink, ArrowLeft } from "lu
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Separator } from "@/components/ui/separator"
+import { UnitsSettings } from "@/components/settings/UnitsSettings"
 
 type GoogleConfigItem = {
   id: string;
@@ -236,6 +237,8 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <UnitsSettings />
     </div>
   );
 } 

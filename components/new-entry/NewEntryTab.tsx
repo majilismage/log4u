@@ -16,6 +16,8 @@ import { useLoading } from "@/lib/LoadingContext"
 import { FilePreview } from "@/components/FilePreview"
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete"
 import type { JourneyEntry } from "@/types/journey"
+import { useUnits } from "@/lib/UnitsContext"
+import { calculateDistance, formatDistance, formatSpeed } from "@/lib/unit-conversions"
 
 interface TravelEntry {
   id: string
@@ -51,31 +53,18 @@ export function NewEntryTab() {
   const [entries, setEntries] = useState<TravelEntry[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const { setLoading, setProgress } = useLoading()
-
-  // Haversine formula to calculate distance between two points on Earth
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c; // Distance in kilometers
-  };
+  const { unitConfig, isLoading: unitsLoading } = useUnits()
 
   const updateDistanceIfPossible = (fromLat: string, fromLng: string, toLat: string, toLng: string) => {
-    if (fromLat && fromLng && toLat && toLng) {
+    if (fromLat && fromLng && toLat && toLng && !unitsLoading) {
       const lat1 = parseFloat(fromLat);
       const lng1 = parseFloat(fromLng);
       const lat2 = parseFloat(toLat);
       const lng2 = parseFloat(toLng);
       
       if (!isNaN(lat1) && !isNaN(lng1) && !isNaN(lat2) && !isNaN(lng2)) {
-        const distanceKm = calculateDistance(lat1, lng1, lat2, lng2);
-        const distanceNm = distanceKm * 0.539957; // Convert to nautical miles
-        setDistance(distanceNm.toFixed(2));
+        const distanceInUserUnit = calculateDistance(lat1, lng1, lat2, lng2, unitConfig.distance.unit);
+        setDistance(distanceInUserUnit.toFixed(2));
       }
     }
   };
@@ -91,10 +80,10 @@ export function NewEntryTab() {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Update distance whenever coordinates change
+  // Update distance whenever coordinates or units change
   useEffect(() => {
     updateDistanceIfPossible(fromLat, fromLng, toLat, toLng);
-  }, [fromLat, fromLng, toLat, toLng]);
+  }, [fromLat, fromLng, toLat, toLng, unitConfig.distance.unit, unitsLoading]);
 
   // Upload files and return the folder links (for images and videos)
   const uploadFiles = async (journeyId: string): Promise<{ imageFolderUrl?: string; videoFolderUrl?: string }> => {
@@ -418,6 +407,9 @@ export function NewEntryTab() {
             <div className="space-y-4">
               {/* Distance - full width on mobile */}
               <div>
+                <Label htmlFor="distance" className="text-sm font-medium mb-2 block">
+                  Distance ({unitConfig.distance.symbol})
+                </Label>
                 <Input
                   id="distance"
                   type="number"
@@ -425,7 +417,7 @@ export function NewEntryTab() {
                   min="0"
                   value={distance}
                   onChange={(e) => setDistance(e.target.value)}
-                  placeholder="Distance (nautical miles) - auto-calculated from coordinates"
+                  placeholder={`Distance in ${unitConfig.distance.label.toLowerCase()} - auto-calculated from coordinates`}
                   required
                   className="h-12 px-4 text-base"
                 />
@@ -433,29 +425,39 @@ export function NewEntryTab() {
               
               {/* Speed inputs - stack on mobile, side by side on larger screens */}
               <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
-                <Input
-                  id="avgSpeed"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={avgSpeed}
-                  onChange={(e) => setAvgSpeed(e.target.value)}
-                  placeholder="Average speed (knots)"
-                  required
-                  className="h-12 px-4 text-base"
-                />
+                <div>
+                  <Label htmlFor="avgSpeed" className="text-sm font-medium mb-2 block">
+                    Average Speed ({unitConfig.speed.symbol})
+                  </Label>
+                  <Input
+                    id="avgSpeed"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={avgSpeed}
+                    onChange={(e) => setAvgSpeed(e.target.value)}
+                    placeholder={`Average speed in ${unitConfig.speed.label.toLowerCase()}`}
+                    required
+                    className="h-12 px-4 text-base"
+                  />
+                </div>
 
-                <Input
-                  id="maxSpeed"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={maxSpeed}
-                  onChange={(e) => setMaxSpeed(e.target.value)}
-                  placeholder="Maximum speed (knots)"
-                  required
-                  className="h-12 px-4 text-base"
-                />
+                <div>
+                  <Label htmlFor="maxSpeed" className="text-sm font-medium mb-2 block">
+                    Maximum Speed ({unitConfig.speed.symbol})
+                  </Label>
+                  <Input
+                    id="maxSpeed"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={maxSpeed}
+                    onChange={(e) => setMaxSpeed(e.target.value)}
+                    placeholder={`Maximum speed in ${unitConfig.speed.label.toLowerCase()}`}
+                    required
+                    className="h-12 px-4 text-base"
+                  />
+                </div>
               </div>
             </div>
           </div>
