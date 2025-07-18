@@ -15,7 +15,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useLoading } from "@/lib/LoadingContext"
 import { FilePreview } from "@/components/FilePreview"
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete"
-import { JourneyLocationSelector } from "@/components/ui/journey-location-selector"
 import type { JourneyEntry } from "@/types/journey"
 import { useUnits } from "@/lib/UnitsContext"
 import { calculateDistance, formatDistance, formatSpeed } from "@/lib/unit-conversions"
@@ -190,30 +189,6 @@ export function NewEntryTab() {
     };
   };
 
-  // Handle journey selection from map
-  const handleJourneySelect = (from: any, to: any) => {
-    // Set FROM location
-    setFromTown(from.city);
-    setFromCountry(from.country);
-    setFromLat(from.coordinates.lat.toString());
-    setFromLng(from.coordinates.lng.toString());
-    
-    // Set TO location
-    setToTown(to.city);
-    setToCountry(to.country);
-    setToLat(to.coordinates.lat.toString());
-    setToLng(to.coordinates.lng.toString());
-
-    // Auto-calculate distance in user's preferred units
-    const dist = calculateDistance(
-      from.coordinates.lat,
-      from.coordinates.lng,
-      to.coordinates.lat,
-      to.coordinates.lng,
-      distanceUnit
-    );
-    setDistance(formatDistance(dist, distanceUnit, false)); // false = no unit label
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -384,27 +359,6 @@ export function NewEntryTab() {
               <h3 className="text-lg font-semibold text-foreground">Route</h3>
             </div>
             
-            {/* Journey Map Selector */}
-            <div className="mb-4">
-              <JourneyLocationSelector 
-                onJourneySelect={handleJourneySelect}
-                triggerText="🗺️ Select Both Locations on Map"
-                className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
-              />
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                Quick way to select both departure and destination locations
-              </p>
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or enter individually</span>
-              </div>
-            </div>
-
             <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
               <LocationAutocomplete
                 label="From"
@@ -414,12 +368,35 @@ export function NewEntryTab() {
                 lngValue={fromLng}
                 onCityChange={setFromTown}
                 onCountryChange={setFromCountry}
-                onLatChange={setFromLat}
-                onLngChange={setFromLng}
+                onLatChange={(lat) => {
+                  setFromLat(lat);
+                  updateDistanceIfPossible(lat, fromLng, toLat, toLng);
+                }}
+                onLngChange={(lng) => {
+                  setFromLng(lng);
+                  updateDistanceIfPossible(fromLat, lng, toLat, toLng);
+                }}
                 placeholder="Town/City"
                 required
                 className="space-y-3"
                 showMapButton={true}
+                enableJourneyMode={true}
+                siblingProps={{
+                  cityValue: toTown,
+                  countryValue: toCountry,
+                  latValue: toLat,
+                  lngValue: toLng,
+                  onCityChange: setToTown,
+                  onCountryChange: setToCountry,
+                  onLatChange: (lat) => {
+                    setToLat(lat);
+                    updateDistanceIfPossible(fromLat, fromLng, lat, toLng);
+                  },
+                  onLngChange: (lng) => {
+                    setToLng(lng);
+                    updateDistanceIfPossible(fromLat, fromLng, toLat, lng);
+                  }
+                }}
               />
 
               <LocationAutocomplete
@@ -430,12 +407,35 @@ export function NewEntryTab() {
                 lngValue={toLng}
                 onCityChange={setToTown}
                 onCountryChange={setToCountry}
-                onLatChange={setToLat}
-                onLngChange={setToLng}
+                onLatChange={(lat) => {
+                  setToLat(lat);
+                  updateDistanceIfPossible(fromLat, fromLng, lat, toLng);
+                }}
+                onLngChange={(lng) => {
+                  setToLng(lng);
+                  updateDistanceIfPossible(fromLat, fromLng, toLat, lng);
+                }}
                 placeholder="Town/City"
                 required
                 className="space-y-3"
                 showMapButton={true}
+                enableJourneyMode={true}
+                siblingProps={{
+                  cityValue: fromTown,
+                  countryValue: fromCountry,
+                  latValue: fromLat,
+                  lngValue: fromLng,
+                  onCityChange: setFromTown,
+                  onCountryChange: setFromCountry,
+                  onLatChange: (lat) => {
+                    setFromLat(lat);
+                    updateDistanceIfPossible(lat, fromLng, toLat, toLng);
+                  },
+                  onLngChange: (lng) => {
+                    setFromLng(lng);
+                    updateDistanceIfPossible(fromLat, lng, toLat, toLng);
+                  }
+                }}
               />
             </div>
           </div>

@@ -33,6 +33,18 @@ interface LocationAutocompleteProps {
   className?: string;
   showMapButton?: boolean;
   mapButtonText?: string;
+  // Journey mode props
+  enableJourneyMode?: boolean;
+  siblingProps?: {
+    cityValue: string;
+    countryValue: string;
+    latValue: string;
+    lngValue: string;
+    onCityChange: (value: string) => void;
+    onCountryChange: (value: string) => void;
+    onLatChange: (value: string) => void;
+    onLngChange: (value: string) => void;
+  };
 }
 
 export function LocationAutocomplete({
@@ -50,7 +62,9 @@ export function LocationAutocomplete({
   required = false,
   className,
   showMapButton = false,
-  mapButtonText = "Map View"
+  mapButtonText = "Map View",
+  enableJourneyMode = false,
+  siblingProps
 }: LocationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -188,6 +202,40 @@ export function LocationAutocomplete({
     setIsMapModalOpen(false);
   };
 
+  // Handle journey selection from map (both locations at once)
+  const handleJourneySelect = (from: LocationInfo, to: LocationInfo) => {
+    if (label === "From") {
+      // This is the FROM field, populate it and the TO field
+      onCityChange(from.city);
+      onCountryChange(from.country);
+      onLatChange(from.coordinates.lat.toString());
+      onLngChange(from.coordinates.lng.toString());
+      
+      // Populate the TO field using sibling props
+      if (siblingProps) {
+        siblingProps.onCityChange(to.city);
+        siblingProps.onCountryChange(to.country);
+        siblingProps.onLatChange(to.coordinates.lat.toString());
+        siblingProps.onLngChange(to.coordinates.lng.toString());
+      }
+    } else {
+      // This is the TO field, populate it and the FROM field
+      onCityChange(to.city);
+      onCountryChange(to.country);
+      onLatChange(to.coordinates.lat.toString());
+      onLngChange(to.coordinates.lng.toString());
+      
+      // Populate the FROM field using sibling props
+      if (siblingProps) {
+        siblingProps.onCityChange(from.city);
+        siblingProps.onCountryChange(from.country);
+        siblingProps.onLatChange(from.coordinates.lat.toString());
+        siblingProps.onLngChange(from.coordinates.lng.toString());
+      }
+    }
+    setIsMapModalOpen(false);
+  };
+
   return (
     <div className={cn("space-y-4", className)}>
       <div className="flex items-center gap-2">
@@ -207,14 +255,23 @@ export function LocationAutocomplete({
             </DialogTrigger>
             <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0">
               <DialogHeader className="p-6 pb-2">
-                <DialogTitle>Map View - Select {label}</DialogTitle>
+                <DialogTitle>
+                  {enableJourneyMode ? "Journey Selection" : `Map View - Select ${label}`}
+                </DialogTitle>
                 <DialogDescription>
-                  Interactive world map for selecting your {label.toLowerCase()} location.
+                  {enableJourneyMode 
+                    ? "Select your departure and destination locations on the map. First click will set your departure location, second click will set your destination."
+                    : `Interactive world map for selecting your ${label.toLowerCase()} location.`
+                  }
                 </DialogDescription>
               </DialogHeader>
               <div className="flex-1 p-6 pt-2">
                 <div className="w-full h-[calc(90vh-120px)]">
-                  <WorldMap onLocationSelect={handleLocationSelect} />
+                  <WorldMap 
+                    mode={enableJourneyMode ? "journey" : "single"}
+                    onLocationSelect={enableJourneyMode ? undefined : handleLocationSelect}
+                    onJourneySelect={enableJourneyMode ? handleJourneySelect : undefined}
+                  />
                 </div>
               </div>
             </DialogContent>
