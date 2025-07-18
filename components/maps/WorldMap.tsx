@@ -16,6 +16,14 @@ interface LocationInfo {
   };
 }
 
+interface LastLocation {
+  lat: number;
+  lng: number;
+  city: string;
+  country: string;
+  arrivalDate: string;
+}
+
 interface WorldMapProps {
   onLocationSelect?: (location: LocationInfo) => void;
 }
@@ -25,16 +33,48 @@ const WorldMap = ({ onLocationSelect }: WorldMapProps) => {
   const mapInstanceRef = useRef<Map | null>(null);
   const [locationInfo, setLocationInfo] = useState<LocationInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [lastLocation, setLastLocation] = useState<LastLocation | null>(null);
+  const [isLoadingLastLocation, setIsLoadingLastLocation] = useState(true);
+
+  // Fetch user's last location for map centering
+  useEffect(() => {
+    const fetchLastLocation = async () => {
+      try {
+        const response = await fetch('/api/user/last-location');
+        const result = await response.json();
+        
+        if (result.success && result.hasLocation) {
+          setLastLocation(result.location);
+        }
+      } catch (error) {
+        console.error('Error fetching last location:', error);
+      } finally {
+        setIsLoadingLastLocation(false);
+      }
+    };
+
+    fetchLastLocation();
+  }, []);
 
   useEffect(() => {
-    // Prevent initialization if the container ref is not set
-    if (!mapContainerRef.current) {
+    // Prevent initialization if the container ref is not set or still loading last location
+    if (!mapContainerRef.current || isLoadingLastLocation) {
       return;
     }
 
     // Initialize the map only if it hasn't been created yet
     if (!mapInstanceRef.current) {
-      mapInstanceRef.current = L.map(mapContainerRef.current).setView([20, 0], 2);
+      // Determine initial center and zoom based on last location
+      let initialCenter: [number, number] = [20, 0]; // Global view default
+      let initialZoom = 2; // Global zoom default
+      
+      if (lastLocation) {
+        initialCenter = [lastLocation.lat, lastLocation.lng];
+        // Zoom level 8 shows approximately 100-mile radius
+        initialZoom = 8;
+      }
+      
+      mapInstanceRef.current = L.map(mapContainerRef.current).setView(initialCenter, initialZoom);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -71,7 +111,7 @@ const WorldMap = ({ onLocationSelect }: WorldMapProps) => {
         mapInstanceRef.current = null;
       }
     };
-  }, [onLocationSelect]);
+  }, [onLocationSelect, isLoadingLastLocation, lastLocation]);
 
   const closePopup = () => {
     setLocationInfo(null);
@@ -95,10 +135,28 @@ const WorldMap = ({ onLocationSelect }: WorldMapProps) => {
         style={{ height: '100%', width: '100%', cursor: 'crosshair' }} 
       />
       
-      {/* Loading indicator */}
+      {/* Loading indicators */}
+      {isLoadingLastLocation && (
+        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 z-[1000]">
+          <p className="text-sm">Loading map...</p>
+        </div>
+      )}
+      
       {isLoading && (
         <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 z-[1000]">
           <p className="text-sm">Getting location...</p>
+        </div>
+      )}
+      
+      {/* Last location info */}
+      {lastLocation && !isLoadingLastLocation && !isLoading && !locationInfo && (
+        <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 z-[1000] max-w-sm">
+          <p className="text-xs text-muted-foreground">
+            Map centered on your last destination:
+          </p>
+          <p className="text-sm font-medium">
+            {lastLocation.city}, {lastLocation.country}
+          </p>
         </div>
       )}
 
