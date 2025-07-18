@@ -7,6 +7,11 @@ import { authLogger } from "@/lib/auth-logger"
 
 export const authOptions: AuthOptions = {
   adapter: PostgresAdapter(db),
+  session: {
+    strategy: "database",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // Refresh daily
+  },
   pages: {
     signIn: "/auth/signin",
     error: "/auth/error",
@@ -17,7 +22,7 @@ export const authOptions: AuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          prompt: "select_account consent",
+          prompt: "select_account",
           access_type: "offline",
           response_type: "code",
           scope:
