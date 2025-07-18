@@ -24,7 +24,7 @@ export async function GET() {
 
     // Fetch unit preferences from user_google_config table
     const { rows } = await db.query(
-      `SELECT "speedUnit", "distanceUnit" FROM user_google_config WHERE "userId" = $1`,
+      `SELECT "speedUnit", "distanceUnit", "mapZoomDistance" FROM user_google_config WHERE "userId" = $1`,
       [userId]
     );
 
@@ -32,6 +32,7 @@ export async function GET() {
       const unitPreferences: UnitPreferences = {
         speedUnit: rows[0].speedUnit,
         distanceUnit: rows[0].distanceUnit,
+        mapZoomDistance: rows[0].mapZoomDistance || 100,
       };
       
       logger.info('Retrieved unit preferences for user', { userId, unitPreferences });
@@ -69,6 +70,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate map zoom distance if provided
+    if (unitPreferences.mapZoomDistance !== undefined) {
+      if (typeof unitPreferences.mapZoomDistance !== 'number' || 
+          unitPreferences.mapZoomDistance < 5 || 
+          unitPreferences.mapZoomDistance > 500) {
+        return NextResponse.json(
+          { error: "Map zoom distance must be between 5 and 500" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Validate unit values
     const validSpeedUnits = ['knots', 'mph', 'kmh'];
     const validDistanceUnits = ['miles', 'nautical_miles', 'kilometers'];
@@ -92,16 +105,16 @@ export async function POST(req: NextRequest) {
       // Update existing record
       await db.query(
         `UPDATE user_google_config 
-         SET "speedUnit" = $1, "distanceUnit" = $2, "updatedAt" = NOW()
-         WHERE "userId" = $3`,
-        [unitPreferences.speedUnit, unitPreferences.distanceUnit, userId]
+         SET "speedUnit" = $1, "distanceUnit" = $2, "mapZoomDistance" = $3, "updatedAt" = NOW()
+         WHERE "userId" = $4`,
+        [unitPreferences.speedUnit, unitPreferences.distanceUnit, unitPreferences.mapZoomDistance || 100, userId]
       );
     } else {
       // Create new record
       await db.query(
-        `INSERT INTO user_google_config ("userId", "speedUnit", "distanceUnit")
-         VALUES ($1, $2, $3)`,
-        [userId, unitPreferences.speedUnit, unitPreferences.distanceUnit]
+        `INSERT INTO user_google_config ("userId", "speedUnit", "distanceUnit", "mapZoomDistance")
+         VALUES ($1, $2, $3, $4)`,
+        [userId, unitPreferences.speedUnit, unitPreferences.distanceUnit, unitPreferences.mapZoomDistance || 100]
       );
     }
 

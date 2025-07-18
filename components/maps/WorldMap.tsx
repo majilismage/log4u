@@ -5,6 +5,8 @@ import L, { Map, Marker } from 'leaflet';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
+import { useUnits } from '@/lib/UnitsContext';
+import { distanceToZoomLevel } from '@/lib/unit-conversions';
 
 interface LocationInfo {
   city: string;
@@ -92,6 +94,9 @@ const WorldMap = ({ onLocationSelect, mode = 'single', onJourneySelect }: WorldM
   const [isLoading, setIsLoading] = useState(false);
   const [lastLocation, setLastLocation] = useState<LastLocation | null>(null);
   const [isLoadingLastLocation, setIsLoadingLastLocation] = useState(true);
+  
+  // Get user's unit preferences for map zoom distance
+  const { unitPreferences } = useUnits();
   
   // Journey mode state
   const [journeyState, setJourneyState] = useState<JourneyState>({
@@ -205,8 +210,9 @@ const WorldMap = ({ onLocationSelect, mode = 'single', onJourneySelect }: WorldM
       
       if (lastLocation) {
         initialCenter = [lastLocation.lat, lastLocation.lng];
-        // Zoom level 8 shows approximately 100-mile radius
-        initialZoom = 8;
+        // Use user's preferred zoom distance (stored in km, convert to zoom level)
+        const zoomDistanceKm = unitPreferences.mapZoomDistance || 100;
+        initialZoom = distanceToZoomLevel(zoomDistanceKm);
       }
       
       mapInstanceRef.current = L.map(mapContainerRef.current).setView(initialCenter, initialZoom);

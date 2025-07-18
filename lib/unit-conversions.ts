@@ -121,6 +121,41 @@ export function calculateDistance(
 }
 
 /**
+ * Convert distance in kilometers to approximate Leaflet zoom level
+ * Based on the relationship between zoom levels and visible radius
+ */
+export function distanceToZoomLevel(distanceKm: number): number {
+  // Approximate zoom levels based on radius in km
+  // These values are calibrated for Leaflet maps
+  if (distanceKm >= 1000) return 3;  // Global/continental view
+  if (distanceKm >= 500) return 4;   // Large country view
+  if (distanceKm >= 250) return 5;   // Country/state view
+  if (distanceKm >= 150) return 6;   // State/region view
+  if (distanceKm >= 100) return 7;   // Large metro area
+  if (distanceKm >= 50) return 8;    // Metro area (default)
+  if (distanceKm >= 25) return 9;    // City view
+  if (distanceKm >= 15) return 10;   // City center
+  if (distanceKm >= 10) return 11;   // Neighborhood
+  if (distanceKm >= 5) return 12;    // Local area
+  return 13; // Very local view
+}
+
+/**
+ * Convert user's preferred zoom distance to display value
+ */
+export function formatZoomDistance(distanceKm: number, unit: DistanceUnit): string {
+  const convertedDistance = convertDistanceFromKm(distanceKm, unit);
+  return formatDistance(convertedDistance, unit, 0);
+}
+
+/**
+ * Convert zoom distance from user's preferred unit to kilometers (for storage)
+ */
+export function convertZoomDistanceToKm(distance: number, fromUnit: DistanceUnit): number {
+  return convertDistanceToKm(distance, fromUnit);
+}
+
+/**
  * Convert journey data to user's preferred units
  */
 export function convertJourneyToUserUnits(
