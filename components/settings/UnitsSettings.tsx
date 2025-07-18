@@ -43,7 +43,7 @@ export function UnitsSettings() {
   }, [localDistanceUnit]);
 
   // Convert local zoom distance to km for comparison with stored value
-  const localMapZoomDistanceKm = convertZoomDistanceToKm(localMapZoomDistance, localDistanceUnit);
+  const localMapZoomDistanceKm = Math.round(convertZoomDistanceToKm(localMapZoomDistance, localDistanceUnit));
   
   const hasChanges = localSpeedUnit !== unitPreferences.speedUnit || 
                     localDistanceUnit !== unitPreferences.distanceUnit ||
