@@ -3,7 +3,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { MapPin, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import WorldMap from '@/components/maps/WorldMap';
 import type { LocationSuggestion } from '@/types/location';
+
+interface LocationInfo {
+  city: string;
+  country: string;
+  displayName: string;
+  coordinates: {
+    lat: number;
+    lng: number;
+  };
+}
 
 interface LocationAutocompleteProps {
   label: string;
@@ -19,6 +31,20 @@ interface LocationAutocompleteProps {
   placeholder?: string;
   required?: boolean;
   className?: string;
+  showMapButton?: boolean;
+  mapButtonText?: string;
+  // Journey mode props
+  enableJourneyMode?: boolean;
+  siblingProps?: {
+    cityValue: string;
+    countryValue: string;
+    latValue: string;
+    lngValue: string;
+    onCityChange: (value: string) => void;
+    onCountryChange: (value: string) => void;
+    onLatChange: (value: string) => void;
+    onLngChange: (value: string) => void;
+  };
 }
 
 export function LocationAutocomplete({
@@ -34,12 +60,17 @@ export function LocationAutocomplete({
   onLocationSelect,
   placeholder = "Town/City",
   required = false,
-  className
+  className,
+  showMapButton = false,
+  mapButtonText = "Map View",
+  enableJourneyMode = false,
+  siblingProps
 }: LocationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -162,9 +193,91 @@ export function LocationAutocomplete({
     };
   }, []);
 
+  // Handle location selection from map
+  const handleLocationSelect = (location: LocationInfo) => {
+    onCityChange(location.city);
+    onCountryChange(location.country);
+    onLatChange(location.coordinates.lat.toString());
+    onLngChange(location.coordinates.lng.toString());
+    setIsMapModalOpen(false);
+  };
+
+  // Handle journey selection from map (both locations at once)
+  const handleJourneySelect = (from: LocationInfo, to: LocationInfo) => {
+    if (label === "From") {
+      // This is the FROM field, populate it and the TO field
+      onCityChange(from.city);
+      onCountryChange(from.country);
+      onLatChange(from.coordinates.lat.toString());
+      onLngChange(from.coordinates.lng.toString());
+      
+      // Populate the TO field using sibling props
+      if (siblingProps) {
+        siblingProps.onCityChange(to.city);
+        siblingProps.onCountryChange(to.country);
+        siblingProps.onLatChange(to.coordinates.lat.toString());
+        siblingProps.onLngChange(to.coordinates.lng.toString());
+      }
+    } else {
+      // This is the TO field, populate it and the FROM field
+      onCityChange(to.city);
+      onCountryChange(to.country);
+      onLatChange(to.coordinates.lat.toString());
+      onLngChange(to.coordinates.lng.toString());
+      
+      // Populate the FROM field using sibling props
+      if (siblingProps) {
+        siblingProps.onCityChange(from.city);
+        siblingProps.onCountryChange(from.country);
+        siblingProps.onLatChange(from.coordinates.lat.toString());
+        siblingProps.onLngChange(from.coordinates.lng.toString());
+      }
+    }
+    setIsMapModalOpen(false);
+  };
+
   return (
     <div className={cn("space-y-4", className)}>
-      <Label htmlFor={`${label.toLowerCase()}-city`} className="text-base font-medium">{label}</Label>
+      <div className="flex items-center gap-2">
+        <Label htmlFor={`${label.toLowerCase()}-city`} className="text-base font-medium">{label}</Label>
+        {showMapButton && (
+          <Dialog open={isMapModalOpen} onOpenChange={setIsMapModalOpen}>
+            <DialogTrigger asChild>
+              <button 
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer"
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  setIsMapModalOpen(true);
+                }}
+              >
+                (use map view)
+              </button>
+            </DialogTrigger>
+            <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0">
+              <DialogHeader className="p-6 pb-2">
+                <DialogTitle>
+                  {enableJourneyMode ? "Journey Selection" : `Map View - Select ${label}`}
+                </DialogTitle>
+                <DialogDescription>
+                  {enableJourneyMode 
+                    ? "Select your departure and destination locations on the map. First click will set your departure location, second click will set your destination."
+                    : `Interactive world map for selecting your ${label.toLowerCase()} location.`
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 p-6 pt-2">
+                <div className="w-full h-[calc(90vh-120px)]">
+                  <WorldMap 
+                    mode={enableJourneyMode ? "journey" : "single"}
+                    onLocationSelect={enableJourneyMode ? undefined : handleLocationSelect}
+                    onJourneySelect={enableJourneyMode ? handleJourneySelect : undefined}
+                  />
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
       
       {/* City Input with Autocomplete */}
       <div className="relative">

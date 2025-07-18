@@ -1,6 +1,5 @@
 import type React from "react"
 import Link from "next/link"
-import { PrivacyPolicyModal, TermsOfUseModal } from "./LegalModals"
 
 export function Footer() {
   return (
@@ -11,13 +10,14 @@ export function Footer() {
             © {new Date().getFullYear()} WanderNote. All rights reserved.
           </p>
           <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2" aria-label="Footer">
-            <PrivacyPolicyModal />
-            <TermsOfUseModal />
+            <Link href="/privacy-policy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Privacy Policy
+            </Link>
+            <Link href="/terms-of-use" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Terms of Use
+            </Link>
             <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Contact Us
-            </Link>
-            <Link href="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              About Us
             </Link>
           </nav>
         </div>

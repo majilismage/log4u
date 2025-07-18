@@ -11,13 +11,31 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { FaExclamationTriangle, FaShieldAlt } from "react-icons/fa"
 import { useSearchParams } from "next/navigation"
-import { Suspense } from "react"
+import { Suspense, useEffect } from "react"
+import { authLogger } from "@/lib/auth-logger"
 
 function AuthErrorContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
   
   const isAccessDenied = error === 'AccessDenied'
+
+  // Log authentication errors
+  useEffect(() => {
+    const allParams: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      allParams[key] = value;
+    });
+
+    authLogger.error("Authentication error page displayed", {
+      error,
+      isAccessDenied,
+      allSearchParams: allParams,
+      userAgent: navigator.userAgent,
+      timestamp: Date.now(),
+      url: window.location.href
+    }, 'AUTH_ERROR');
+  }, [searchParams, error, isAccessDenied]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900">

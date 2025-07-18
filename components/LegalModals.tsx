@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import {
@@ -159,7 +159,7 @@ function PrivacyPolicyText() {
   )
 }
 
-export function PrivacyPolicyModal() {
+function PrivacyPolicyModalContent() {
   const [isOpen, setIsOpen] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -214,6 +214,18 @@ export function PrivacyPolicyModal() {
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+export function PrivacyPolicyModal() {
+  return (
+    <Suspense fallback={
+      <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        Privacy Policy
+      </button>
+    }>
+      <PrivacyPolicyModalContent />
+    </Suspense>
   )
 }
 
@@ -364,7 +376,7 @@ function TermsOfUseText() {
   )
 }
 
-export function TermsOfUseModal() {
+function TermsOfUseModalContent() {
   const [isOpen, setIsOpen] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -419,5 +431,17 @@ export function TermsOfUseModal() {
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+export function TermsOfUseModal() {
+  return (
+    <Suspense fallback={
+      <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        Terms of Use
+      </button>
+    }>
+      <TermsOfUseModalContent />
+    </Suspense>
   )
 } 

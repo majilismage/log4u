@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { SignInButton } from "@/components/auth/SignInButton"
 import Image from "next/image"
+import { authLogger } from "@/lib/auth-logger"
 
 
 export default function SignInPage() {
@@ -21,8 +22,50 @@ export default function SignInPage() {
   > | null>(null)
 
   useEffect(() => {
+    // Check for logout debug info
+    const logoutDebug = sessionStorage.getItem('logout-debug');
+    if (logoutDebug) {
+      try {
+        const debugData = JSON.parse(logoutDebug);
+        authLogger.info("Sign-in page visited after logout", {
+          userAgent: navigator.userAgent,
+          url: window.location.href,
+          referrer: document.referrer,
+          logoutDebugData: debugData,
+          timeSinceLogout: Date.now() - debugData.startTime,
+          timestamp: Date.now()
+        }, 'SIGNIN_PAGE');
+        
+        // Clear the debug data
+        sessionStorage.removeItem('logout-debug');
+        
+        console.log("Logout debug info found:", debugData);
+      } catch (error) {
+        console.warn("Failed to parse logout debug data:", error);
+      }
+    } else {
+      // Log signin page visit normally
+      authLogger.info("Sign-in page visited", {
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        referrer: document.referrer,
+        timestamp: Date.now()
+      }, 'SIGNIN_PAGE');
+    }
+
     const fetchProviders = async () => {
+      authLogger.info("Fetching OAuth providers", {
+        timestamp: Date.now()
+      }, 'SIGNIN_PAGE');
+
       const res = await getProviders()
+      
+      authLogger.info("OAuth providers fetched", {
+        providerCount: res ? Object.keys(res).length : 0,
+        providerNames: res ? Object.values(res).map(p => p.name) : [],
+        timestamp: Date.now()
+      }, 'SIGNIN_PAGE');
+
       setProviders(res)
     }
     fetchProviders()

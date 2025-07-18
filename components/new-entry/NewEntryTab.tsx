@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { format } from "date-fns"
 import { CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,8 @@ import { useLoading } from "@/lib/LoadingContext"
 import { FilePreview } from "@/components/FilePreview"
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete"
 import type { JourneyEntry } from "@/types/journey"
+import { useUnits } from "@/lib/UnitsContext"
+import { calculateDistance, formatDistance, formatSpeed } from "@/lib/unit-conversions"
 
 interface TravelEntry {
   id: string
@@ -33,6 +35,8 @@ interface TravelEntry {
 export function NewEntryTab() {
   const [departureDate, setDepartureDate] = useState<Date>(new Date())
   const [arrivalDate, setArrivalDate] = useState<Date>(new Date())
+  const [departureDateOpen, setDepartureDateOpen] = useState(false)
+  const [arrivalDateOpen, setArrivalDateOpen] = useState(false)
   const [journeyId, setJourneyId] = useState<string>("")
   const [fromTown, setFromTown] = useState("")
   const [fromCountry, setFromCountry] = useState("")
@@ -49,6 +53,21 @@ export function NewEntryTab() {
   const [entries, setEntries] = useState<TravelEntry[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const { setLoading, setProgress } = useLoading()
+  const { unitConfig, isLoading: unitsLoading } = useUnits()
+
+  const updateDistanceIfPossible = (fromLat: string, fromLng: string, toLat: string, toLng: string) => {
+    if (fromLat && fromLng && toLat && toLng && !unitsLoading) {
+      const lat1 = parseFloat(fromLat);
+      const lng1 = parseFloat(fromLng);
+      const lat2 = parseFloat(toLat);
+      const lng2 = parseFloat(toLng);
+      
+      if (!isNaN(lat1) && !isNaN(lng1) && !isNaN(lat2) && !isNaN(lng2)) {
+        const distanceInUserUnit = calculateDistance(lat1, lng1, lat2, lng2, unitConfig.distance.unit);
+        setDistance(distanceInUserUnit.toFixed(2));
+      }
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -60,6 +79,11 @@ export function NewEntryTab() {
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
+
+  // Update distance whenever coordinates or units change
+  useEffect(() => {
+    updateDistanceIfPossible(fromLat, fromLng, toLat, toLng);
+  }, [fromLat, fromLng, toLat, toLng, unitConfig.distance.unit, unitsLoading]);
 
   // Upload files and return the folder links (for images and videos)
   const uploadFiles = async (journeyId: string): Promise<{ imageFolderUrl?: string; videoFolderUrl?: string }> => {
@@ -165,6 +189,7 @@ export function NewEntryTab() {
     };
   };
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true, 'Saving your travel entry...');
@@ -260,7 +285,7 @@ export function NewEntryTab() {
             <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="departureDate" className="text-base font-medium">Departure Date</Label>
-                <Popover>
+                <Popover open={departureDateOpen} onOpenChange={setDepartureDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -277,7 +302,12 @@ export function NewEntryTab() {
                     <Calendar
                       mode="single"
                       selected={departureDate}
-                      onSelect={(date) => date && setDepartureDate(date)}
+                      onSelect={(date) => {
+                        if (date) {
+                          setDepartureDate(date)
+                          setDepartureDateOpen(false)
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -286,7 +316,7 @@ export function NewEntryTab() {
 
               <div className="space-y-2">
                 <Label htmlFor="arrivalDate" className="text-base font-medium">Arrival Date</Label>
-                <Popover>
+                <Popover open={arrivalDateOpen} onOpenChange={setArrivalDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -303,7 +333,12 @@ export function NewEntryTab() {
                     <Calendar
                       mode="single"
                       selected={arrivalDate}
-                      onSelect={(date) => date && setArrivalDate(date)}
+                      onSelect={(date) => {
+                        if (date) {
+                          setArrivalDate(date)
+                          setArrivalDateOpen(false)
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -333,11 +368,35 @@ export function NewEntryTab() {
                 lngValue={fromLng}
                 onCityChange={setFromTown}
                 onCountryChange={setFromCountry}
-                onLatChange={setFromLat}
-                onLngChange={setFromLng}
+                onLatChange={(lat) => {
+                  setFromLat(lat);
+                  updateDistanceIfPossible(lat, fromLng, toLat, toLng);
+                }}
+                onLngChange={(lng) => {
+                  setFromLng(lng);
+                  updateDistanceIfPossible(fromLat, lng, toLat, toLng);
+                }}
                 placeholder="Town/City"
                 required
                 className="space-y-3"
+                showMapButton={true}
+                enableJourneyMode={true}
+                siblingProps={{
+                  cityValue: toTown,
+                  countryValue: toCountry,
+                  latValue: toLat,
+                  lngValue: toLng,
+                  onCityChange: setToTown,
+                  onCountryChange: setToCountry,
+                  onLatChange: (lat) => {
+                    setToLat(lat);
+                    updateDistanceIfPossible(fromLat, fromLng, lat, toLng);
+                  },
+                  onLngChange: (lng) => {
+                    setToLng(lng);
+                    updateDistanceIfPossible(fromLat, fromLng, toLat, lng);
+                  }
+                }}
               />
 
               <LocationAutocomplete
@@ -348,16 +407,40 @@ export function NewEntryTab() {
                 lngValue={toLng}
                 onCityChange={setToTown}
                 onCountryChange={setToCountry}
-                onLatChange={setToLat}
-                onLngChange={setToLng}
+                onLatChange={(lat) => {
+                  setToLat(lat);
+                  updateDistanceIfPossible(fromLat, fromLng, lat, toLng);
+                }}
+                onLngChange={(lng) => {
+                  setToLng(lng);
+                  updateDistanceIfPossible(fromLat, fromLng, toLat, lng);
+                }}
                 placeholder="Town/City"
                 required
                 className="space-y-3"
+                showMapButton={true}
+                enableJourneyMode={true}
+                siblingProps={{
+                  cityValue: fromTown,
+                  countryValue: fromCountry,
+                  latValue: fromLat,
+                  lngValue: fromLng,
+                  onCityChange: setFromTown,
+                  onCountryChange: setFromCountry,
+                  onLatChange: (lat) => {
+                    setFromLat(lat);
+                    updateDistanceIfPossible(lat, fromLng, toLat, toLng);
+                  },
+                  onLngChange: (lng) => {
+                    setFromLng(lng);
+                    updateDistanceIfPossible(fromLat, lng, toLat, toLng);
+                  }
+                }}
               />
             </div>
           </div>
 
-          {/* Journey Details Section */}
+          {/* Journey Telemetry Section */}
           <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center justify-center w-8 h-8 bg-green-50 dark:bg-green-950 rounded-lg">
@@ -365,12 +448,15 @@ export function NewEntryTab() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-foreground">Details</h3>
+              <h3 className="text-lg font-semibold text-foreground">Telemetry</h3>
             </div>
             
             <div className="space-y-4">
               {/* Distance - full width on mobile */}
               <div>
+                <Label htmlFor="distance" className="text-sm font-medium mb-2 block">
+                  Distance ({unitConfig.distance.symbol})
+                </Label>
                 <Input
                   id="distance"
                   type="number"
@@ -378,7 +464,7 @@ export function NewEntryTab() {
                   min="0"
                   value={distance}
                   onChange={(e) => setDistance(e.target.value)}
-                  placeholder="Distance"
+                  placeholder={`Distance in ${unitConfig.distance.label.toLowerCase()} - auto-calculated from coordinates`}
                   required
                   className="h-12 px-4 text-base"
                 />
@@ -386,29 +472,39 @@ export function NewEntryTab() {
               
               {/* Speed inputs - stack on mobile, side by side on larger screens */}
               <div className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-4">
-                <Input
-                  id="avgSpeed"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={avgSpeed}
-                  onChange={(e) => setAvgSpeed(e.target.value)}
-                  placeholder="Average speed (knots)"
-                  required
-                  className="h-12 px-4 text-base"
-                />
+                <div>
+                  <Label htmlFor="avgSpeed" className="text-sm font-medium mb-2 block">
+                    Average Speed ({unitConfig.speed.symbol})
+                  </Label>
+                  <Input
+                    id="avgSpeed"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={avgSpeed}
+                    onChange={(e) => setAvgSpeed(e.target.value)}
+                    placeholder={`Average speed in ${unitConfig.speed.label.toLowerCase()}`}
+                    required
+                    className="h-12 px-4 text-base"
+                  />
+                </div>
 
-                <Input
-                  id="maxSpeed"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={maxSpeed}
-                  onChange={(e) => setMaxSpeed(e.target.value)}
-                  placeholder="Maximum speed (knots)"
-                  required
-                  className="h-12 px-4 text-base"
-                />
+                <div>
+                  <Label htmlFor="maxSpeed" className="text-sm font-medium mb-2 block">
+                    Maximum Speed ({unitConfig.speed.symbol})
+                  </Label>
+                  <Input
+                    id="maxSpeed"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={maxSpeed}
+                    onChange={(e) => setMaxSpeed(e.target.value)}
+                    placeholder={`Maximum speed in ${unitConfig.speed.label.toLowerCase()}`}
+                    required
+                    className="h-12 px-4 text-base"
+                  />
+                </div>
               </div>
             </div>
           </div>

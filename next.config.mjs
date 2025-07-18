@@ -12,8 +12,6 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
-  // Optimize CSS loading
-  optimizeFonts: true,
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
