@@ -5,9 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Input } from '@/components/ui/input';
 import { Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useUnits } from '@/lib/UnitsContext';
 import { SPEED_UNITS, DISTANCE_UNITS } from '@/types/units';
+import { formatZoomDistance, convertZoomDistanceToKm, convertDistanceFromKm } from '@/lib/unit-conversions';
 import type { SpeedUnit, DistanceUnit } from '@/types/units';
 
 export function UnitsSettings() {
@@ -16,15 +18,36 @@ export function UnitsSettings() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [localSpeedUnit, setLocalSpeedUnit] = useState<SpeedUnit>(unitPreferences.speedUnit);
   const [localDistanceUnit, setLocalDistanceUnit] = useState<DistanceUnit>(unitPreferences.distanceUnit);
+  const [localMapZoomDistance, setLocalMapZoomDistance] = useState<number>(
+    // Convert from stored km to user's preferred unit for display
+    convertDistanceFromKm(unitPreferences.mapZoomDistance || 100, unitPreferences.distanceUnit)
+  );
 
   // Update local state when preferences change
   React.useEffect(() => {
     setLocalSpeedUnit(unitPreferences.speedUnit);
     setLocalDistanceUnit(unitPreferences.distanceUnit);
+    setLocalMapZoomDistance(
+      convertDistanceFromKm(unitPreferences.mapZoomDistance || 100, unitPreferences.distanceUnit)
+    );
   }, [unitPreferences]);
 
+  // Handle unit change - convert map zoom distance to new unit
+  React.useEffect(() => {
+    if (localDistanceUnit !== unitPreferences.distanceUnit) {
+      // Convert current zoom distance from old unit to new unit
+      const currentZoomDistanceKm = convertZoomDistanceToKm(localMapZoomDistance, unitPreferences.distanceUnit);
+      const newZoomDistance = convertDistanceFromKm(currentZoomDistanceKm, localDistanceUnit);
+      setLocalMapZoomDistance(Math.round(newZoomDistance));
+    }
+  }, [localDistanceUnit]);
+
+  // Convert local zoom distance to km for comparison with stored value
+  const localMapZoomDistanceKm = convertZoomDistanceToKm(localMapZoomDistance, localDistanceUnit);
+  
   const hasChanges = localSpeedUnit !== unitPreferences.speedUnit || 
-                    localDistanceUnit !== unitPreferences.distanceUnit;
+                    localDistanceUnit !== unitPreferences.distanceUnit ||
+                    Math.abs(localMapZoomDistanceKm - (unitPreferences.mapZoomDistance || 100)) > 0.1;
 
   const handleSave = async () => {
     if (!hasChanges) return;
@@ -35,6 +58,7 @@ export function UnitsSettings() {
     const success = await updateUnitPreferences({
       speedUnit: localSpeedUnit,
       distanceUnit: localDistanceUnit,
+      mapZoomDistance: localMapZoomDistanceKm,
     });
 
     setSaving(false);
@@ -47,6 +71,9 @@ export function UnitsSettings() {
   const handleReset = () => {
     setLocalSpeedUnit(unitPreferences.speedUnit);
     setLocalDistanceUnit(unitPreferences.distanceUnit);
+    setLocalMapZoomDistance(
+      convertDistanceFromKm(unitPreferences.mapZoomDistance || 100, unitPreferences.distanceUnit)
+    );
     setSaveStatus('idle');
   };
 
@@ -135,6 +162,41 @@ export function UnitsSettings() {
           </RadioGroup>
         </div>
 
+        {/* Map Zoom Distance Section */}
+        <div className="space-y-4">
+          <div>
+            <Label className="text-base font-medium">Map Zoom Distance</Label>
+            <p className="text-sm text-muted-foreground">
+              Default distance radius when viewing maps centered on your last location
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className="flex-1 max-w-xs">
+              <Input
+                type="number"
+                value={localMapZoomDistance}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  if (!isNaN(value) && value >= 5 && value <= 500) {
+                    setLocalMapZoomDistance(value);
+                  }
+                }}
+                min="5"
+                max="500"
+                step="5"
+                className="text-center"
+              />
+            </div>
+            <span className="text-sm text-muted-foreground font-medium">
+              {DISTANCE_UNITS[localDistanceUnit].symbol}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Range: 5-500 {DISTANCE_UNITS[localDistanceUnit].symbol}. 
+            This controls how zoomed in the map appears when opening to your last location.
+          </p>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex items-center justify-between pt-4 border-t">
           <div className="flex items-center gap-2">
@@ -189,6 +251,10 @@ export function UnitsSettings() {
             <p className="text-sm">
               <span className="text-muted-foreground">Speed example:</span>{' '}
               <span className="font-medium">25.5 {SPEED_UNITS[localSpeedUnit].symbol}</span>
+            </p>
+            <p className="text-sm">
+              <span className="text-muted-foreground">Map zoom distance:</span>{' '}
+              <span className="font-medium">{localMapZoomDistance} {DISTANCE_UNITS[localDistanceUnit].symbol} radius</span>
             </p>
           </div>
         </div>

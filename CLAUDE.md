@@ -86,22 +86,40 @@ useEffect(() => {
 - `components/ClientProviders.tsx` - Client-side provider wrapper
 - `components/ui/location-autocomplete.tsx` - Location search component
 
+#### Authentication System
+- NextAuth.js with Google OAuth using database sessions (30-day expiry)
+- Custom secure token management prevents account conflation
+- Comprehensive authentication logging via `lib/auth-logger.ts`
+- OAuth scope validation ensures required Google permissions
+- Session stored in PostgreSQL with automatic token refresh
+
+#### Database Migrations
+- PostgreSQL migrations in `/database/migrations/`
+- Current migration: `add-unit-preferences.sql` for units system
+- Use `psql -d database_url -f migration_file.sql` for manual migration
+
 ## Development Guidelines
 
-### Code Patterns
-- Use TypeScript strict mode
-- Follow existing component patterns from Shadcn/UI
-- Implement proper error boundaries for API calls
-- Use React Hook Form with Zod validation for forms
+### Critical Patterns
+- **React 18 Strict Mode**: Avoid react-leaflet library - use manual Leaflet instance management
+- **Context Isolation**: Wrap client providers in `ClientProviders.tsx` to prevent ChunkLoadError
+- **Form Validation**: Use React Hook Form with Zod validation for all forms
+- **Error Boundaries**: Implement proper error boundaries for all API calls
 
 ### API Design
-- RESTful endpoints with proper HTTP methods
-- Consistent error handling and logging
-- Rate limiting for external APIs (especially Nominatim)
-- Session-based authentication validation
+- RESTful endpoints with proper HTTP methods and error handling
+- Session-based authentication validation using NextAuth
+- Rate limiting for external APIs (especially Nominatim geocoding)
+- Comprehensive request/response logging with `authLogger`
+
+### Environment Variables Required
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - OAuth credentials
+- `DATABASE_URL` - Neon PostgreSQL connection string
+- `NEXTAUTH_URL` / `NEXTAUTH_SECRET` - NextAuth configuration
+- `SMTP_*` - Email configuration (optional)
 
 ### Performance Considerations
-- Client-side caching for geocoding results
-- Debounced user inputs for API calls
-- Optimized image handling for media uploads
+- Client-side geocoding cache with LRU implementation
+- Debounced user inputs for API calls (especially location search)
+- Image optimization disabled for better compatibility
 - Efficient database queries with proper indexing

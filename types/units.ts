@@ -4,6 +4,7 @@ export type DistanceUnit = 'miles' | 'nautical_miles' | 'kilometers';
 export interface UnitPreferences {
   speedUnit: SpeedUnit;
   distanceUnit: DistanceUnit;
+  mapZoomDistance?: number; // Distance in kilometers for map zoom (converted for display)
 }
 
 export interface UnitConfig {
@@ -33,5 +34,6 @@ export const DISTANCE_UNITS: Record<DistanceUnit, { label: string; symbol: strin
 
 export const DEFAULT_UNIT_PREFERENCES: UnitPreferences = {
   speedUnit: 'knots',
-  distanceUnit: 'nautical_miles'
+  distanceUnit: 'nautical_miles',
+  mapZoomDistance: 100 // Default 100km zoom distance
 }; 
