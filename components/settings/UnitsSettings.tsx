@@ -52,6 +52,19 @@ export function UnitsSettings() {
   const handleSave = async () => {
     if (!hasChanges) return;
 
+    console.log('🔄 [DEBUG] UnitsSettings handleSave started');
+    console.log('🔄 [DEBUG] Current local state:', {
+      localSpeedUnit,
+      localDistanceUnit,
+      localMapZoomDistance,
+      localMapZoomDistanceKm
+    });
+    console.log('🔄 [DEBUG] Data to send to updateUnitPreferences:', {
+      speedUnit: localSpeedUnit,
+      distanceUnit: localDistanceUnit,
+      mapZoomDistance: localMapZoomDistanceKm,
+    });
+
     setSaving(true);
     setSaveStatus('idle');
 
@@ -60,6 +73,8 @@ export function UnitsSettings() {
       distanceUnit: localDistanceUnit,
       mapZoomDistance: localMapZoomDistanceKm,
     });
+
+    console.log('🔄 [DEBUG] updateUnitPreferences result:', success);
 
     setSaving(false);
     setSaveStatus(success ? 'success' : 'error');

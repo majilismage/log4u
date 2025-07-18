@@ -53,17 +53,32 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('🔄 [DEBUG] POST /api/user/unit-preferences started');
+    
     const session = (await getServerSession(authOptions)) as UserSession;
+    console.log('🔄 [DEBUG] Session:', { hasSession: !!session, userId: session?.user?.id });
 
     if (!session?.user?.id) {
+      console.log('❌ [DEBUG] Unauthorized - no session or user ID');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userId = session.user.id;
+    console.log('🔄 [DEBUG] Processing for userId:', userId);
+    
     const body = await req.json();
+    console.log('🔄 [DEBUG] Request body received:', body);
+    
     const { unitPreferences } = body;
+    console.log('🔄 [DEBUG] Extracted unitPreferences:', unitPreferences);
 
     if (!unitPreferences || !unitPreferences.speedUnit || !unitPreferences.distanceUnit) {
+      console.log('❌ [DEBUG] Invalid unit preferences data:', {
+        hasUnitPreferences: !!unitPreferences,
+        hasSpeedUnit: !!unitPreferences?.speedUnit,
+        hasDistanceUnit: !!unitPreferences?.distanceUnit,
+        unitPreferences
+      });
       return NextResponse.json(
         { error: "Invalid unit preferences data" },
         { status: 400 }
@@ -71,10 +86,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate map zoom distance if provided
+    console.log('🔄 [DEBUG] Validating map zoom distance:', {
+      mapZoomDistance: unitPreferences.mapZoomDistance,
+      type: typeof unitPreferences.mapZoomDistance,
+      isDefined: unitPreferences.mapZoomDistance !== undefined
+    });
+    
     if (unitPreferences.mapZoomDistance !== undefined) {
       if (typeof unitPreferences.mapZoomDistance !== 'number' || 
           unitPreferences.mapZoomDistance < 5 || 
           unitPreferences.mapZoomDistance > 500) {
+        console.log('❌ [DEBUG] Invalid map zoom distance:', {
+          value: unitPreferences.mapZoomDistance,
+          type: typeof unitPreferences.mapZoomDistance,
+          isNumber: typeof unitPreferences.mapZoomDistance === 'number',
+          tooSmall: unitPreferences.mapZoomDistance < 5,
+          tooLarge: unitPreferences.mapZoomDistance > 500
+        });
         return NextResponse.json(
           { error: "Map zoom distance must be between 5 and 500" },
           { status: 400 }
@@ -85,9 +113,19 @@ export async function POST(req: NextRequest) {
     // Validate unit values
     const validSpeedUnits = ['knots', 'mph', 'kmh'];
     const validDistanceUnits = ['miles', 'nautical_miles', 'kilometers'];
+    
+    console.log('🔄 [DEBUG] Validating unit values:', {
+      speedUnit: unitPreferences.speedUnit,
+      distanceUnit: unitPreferences.distanceUnit,
+      validSpeedUnits,
+      validDistanceUnits,
+      speedUnitValid: validSpeedUnits.includes(unitPreferences.speedUnit),
+      distanceUnitValid: validDistanceUnits.includes(unitPreferences.distanceUnit)
+    });
 
     if (!validSpeedUnits.includes(unitPreferences.speedUnit) ||
         !validDistanceUnits.includes(unitPreferences.distanceUnit)) {
+      console.log('❌ [DEBUG] Invalid unit values detected');
       return NextResponse.json(
         { error: "Invalid unit values" },
         { status: 400 }
@@ -95,35 +133,61 @@ export async function POST(req: NextRequest) {
     }
 
     // Update unit preferences in the database
+    console.log('🔄 [DEBUG] Starting database operations');
+    
     // First, check if user has a config record
     const { rows: existingRows } = await db.query(
       `SELECT "userId" FROM user_google_config WHERE "userId" = $1`,
       [userId]
     );
+    
+    console.log('🔄 [DEBUG] Existing config check:', {
+      existingRowsCount: existingRows.length,
+      hasExistingConfig: existingRows.length > 0
+    });
+    
+    const finalMapZoomDistance = unitPreferences.mapZoomDistance || 100;
+    console.log('🔄 [DEBUG] Final values for database:', {
+      speedUnit: unitPreferences.speedUnit,
+      distanceUnit: unitPreferences.distanceUnit,
+      mapZoomDistance: finalMapZoomDistance,
+      userId
+    });
 
     if (existingRows.length > 0) {
       // Update existing record
-      await db.query(
+      console.log('🔄 [DEBUG] Updating existing config record');
+      const updateResult = await db.query(
         `UPDATE user_google_config 
          SET "speedUnit" = $1, "distanceUnit" = $2, "mapZoomDistance" = $3, "updatedAt" = NOW()
          WHERE "userId" = $4`,
-        [unitPreferences.speedUnit, unitPreferences.distanceUnit, unitPreferences.mapZoomDistance || 100, userId]
+        [unitPreferences.speedUnit, unitPreferences.distanceUnit, finalMapZoomDistance, userId]
       );
+      console.log('🔄 [DEBUG] Update query result:', { rowCount: updateResult.rowCount });
     } else {
       // Create new record
-      await db.query(
+      console.log('🔄 [DEBUG] Creating new config record');
+      const insertResult = await db.query(
         `INSERT INTO user_google_config ("userId", "speedUnit", "distanceUnit", "mapZoomDistance")
          VALUES ($1, $2, $3, $4)`,
-        [userId, unitPreferences.speedUnit, unitPreferences.distanceUnit, unitPreferences.mapZoomDistance || 100]
+        [userId, unitPreferences.speedUnit, unitPreferences.distanceUnit, finalMapZoomDistance]
       );
+      console.log('🔄 [DEBUG] Insert query result:', { rowCount: insertResult.rowCount });
     }
 
+    console.log('✅ [DEBUG] Database operations completed successfully');
     logger.info('Updated unit preferences for user', { userId, unitPreferences });
-    return NextResponse.json({ 
+    
+    const successResponse = { 
       message: "Unit preferences updated successfully",
       unitPreferences 
-    });
+    };
+    console.log('✅ [DEBUG] Sending success response:', successResponse);
+    
+    return NextResponse.json(successResponse);
   } catch (error) {
+    console.error('❌ [DEBUG] Exception in POST handler:', error);
+    console.error('❌ [DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     logger.error("Error updating unit preferences", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

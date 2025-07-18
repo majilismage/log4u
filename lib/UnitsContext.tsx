@@ -52,24 +52,54 @@ export function UnitsProvider({ children }: { children: React.ReactNode }) {
     try {
       const updatedPreferences = { ...unitPreferences, ...newPreferences };
       
+      console.log('🔄 [DEBUG] Starting updateUnitPreferences with:', {
+        currentPreferences: unitPreferences,
+        newPreferences,
+        updatedPreferences
+      });
+      
+      const requestBody = { unitPreferences: updatedPreferences };
+      console.log('🔄 [DEBUG] Request body to send:', requestBody);
+      
       const response = await fetch('/api/user/unit-preferences', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ unitPreferences: updatedPreferences }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log('🔄 [DEBUG] Response status:', response.status);
+      console.log('🔄 [DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      const responseText = await response.text();
+      console.log('🔄 [DEBUG] Raw response text:', responseText);
+      
       if (response.ok) {
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+          console.log('✅ [DEBUG] Parsed response data:', responseData);
+        } catch (parseError) {
+          console.log('⚠️ [DEBUG] Response was OK but not JSON:', responseText);
+        }
+        
         setUnitPreferences(updatedPreferences);
-        console.log('Unit preferences updated successfully', updatedPreferences);
+        console.log('✅ Unit preferences updated successfully', updatedPreferences);
         return true;
       } else {
-        console.error('Failed to update unit preferences', { status: response.status });
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+          console.error('❌ [DEBUG] Error response data:', errorData);
+        } catch (parseError) {
+          console.error('❌ [DEBUG] Non-JSON error response:', responseText);
+        }
+        console.error('❌ Failed to update unit preferences', { status: response.status, responseText });
         return false;
       }
     } catch (error) {
-      console.error('Error updating unit preferences', error);
+      console.error('❌ [DEBUG] Exception in updateUnitPreferences:', error);
       return false;
     }
   }, [unitPreferences]);
