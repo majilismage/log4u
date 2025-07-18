@@ -174,16 +174,16 @@ export function UnitsSettings() {
             <div className="flex-1 max-w-xs">
               <Input
                 type="number"
-                value={localMapZoomDistance}
+                value={Math.round(localMapZoomDistance)}
                 onChange={(e) => {
-                  const value = parseFloat(e.target.value);
-                  if (!isNaN(value) && value >= 5 && value <= 500) {
+                  const value = parseInt(e.target.value, 10);
+                  if (!isNaN(value)) {
                     setLocalMapZoomDistance(value);
                   }
                 }}
                 min="5"
                 max="500"
-                step="5"
+                step="1"
                 className="text-center"
               />
             </div>
