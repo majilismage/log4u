@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { MapPin, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
-import WorldMap from '@/components/maps/WorldMap';
+import MapLibreWrapper, { type JourneyState } from '@/components/maps/MapLibreWrapper';
 import type { LocationSuggestion } from '@/types/location';
 
 interface LocationInfo {
@@ -71,10 +71,34 @@ export function LocationAutocomplete({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [journeyState, setJourneyState] = useState<JourneyState>({
+    step: 'from',
+    fromLocation: null,
+    toLocation: null,
+    markers: { from: false, to: false, crosshair: false },
+    lines: { dynamic: null, static: null }
+  });
   
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup function for map dialog close
+  const cleanupMapDialog = () => {
+    // Reset journey state to fresh state
+    setJourneyState({
+      step: 'from',
+      fromLocation: null,
+      toLocation: null,
+      markers: { from: false, to: false, crosshair: false },
+      lines: { dynamic: null, static: null }
+    });
+  };
+
+  const handleDialogClose = () => {
+    setIsMapModalOpen(false);
+    cleanupMapDialog();
+  };
 
   // Debounced search function
   const searchLocations = useCallback(async (query: string) => {
@@ -241,7 +265,13 @@ export function LocationAutocomplete({
       <div className="flex items-center gap-2">
         <Label htmlFor={`${label.toLowerCase()}-city`} className="text-base font-medium">{label}</Label>
         {showMapButton && (
-          <Dialog open={isMapModalOpen} onOpenChange={setIsMapModalOpen}>
+          <Dialog open={isMapModalOpen} onOpenChange={(open) => {
+            if (!open) {
+              handleDialogClose();
+            } else {
+              setIsMapModalOpen(open);
+            }
+          }}>
             <DialogTrigger asChild>
               <button 
                 className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer"
@@ -253,24 +283,37 @@ export function LocationAutocomplete({
                 (use map view)
               </button>
             </DialogTrigger>
-            <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0">
+            <DialogContent 
+              className="max-w-6xl w-[95vw] h-[90vh] p-0"
+              onEscapeKeyDown={handleDialogClose}
+              onPointerDownOutside={handleDialogClose}
+            >
               <DialogHeader className="p-6 pb-2">
                 <DialogTitle>
                   {enableJourneyMode ? "Journey Selection" : `Map View - Select ${label}`}
                 </DialogTitle>
                 <DialogDescription>
                   {enableJourneyMode 
-                    ? "Select your departure and destination locations on the map. First click will set your departure location, second click will set your destination."
+                    ? "Click on the map to select your start point for your journey."
                     : `Interactive world map for selecting your ${label.toLowerCase()} location.`
                   }
                 </DialogDescription>
               </DialogHeader>
               <div className="flex-1 p-6 pt-2">
+                {/* Starting point display */}
+                {enableJourneyMode && journeyState.fromLocation && (
+                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <p className="text-xs text-green-700 dark:text-green-300 font-medium">
+                      Starting point: {journeyState.fromLocation.city}, {journeyState.fromLocation.country}, {journeyState.fromLocation.coordinates.lat.toFixed(4)}, {journeyState.fromLocation.coordinates.lng.toFixed(4)}
+                    </p>
+                  </div>
+                )}
                 <div className="w-full h-[calc(90vh-120px)]">
-                  <WorldMap 
+                  <MapLibreWrapper 
                     mode={enableJourneyMode ? "journey" : "single"}
                     onLocationSelect={enableJourneyMode ? undefined : handleLocationSelect}
                     onJourneySelect={enableJourneyMode ? handleJourneySelect : undefined}
+                    onJourneyStateChange={enableJourneyMode ? setJourneyState : undefined}
                   />
                 </div>
               </div>

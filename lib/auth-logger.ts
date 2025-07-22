@@ -6,6 +6,14 @@ class AuthLogger {
   }
 
   private async writeAuthLog(level: string, message: string, data?: any, context?: string) {
+    // Only log errors and critical authentication failures
+    const criticalContexts = ['ERROR', 'AUTH_ERROR', 'TOKEN_ERROR'];
+    const shouldLog = level === 'ERROR' || criticalContexts.includes(context || '');
+    
+    if (!shouldLog) {
+      return; // Skip verbose logging
+    }
+
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
@@ -17,13 +25,12 @@ class AuthLogger {
     };
 
     if (this.isServer) {
-      // Server-side logging - use console for now to avoid fs/promises bundling issues
-      console.log(`[AUTH-SERVER] ${JSON.stringify(logEntry)}`);
+      // Only log critical errors to console
+      console.error(`[AUTH-ERROR] ${JSON.stringify(logEntry)}`);
       
-      // Attempt to write to file if possible (only in server environment)
+      // Write critical errors to file
       try {
         if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-          // Only try to write to file if we have access to process
           const fs = eval('require("fs")');
           const path = eval('require("path")');
           
@@ -33,29 +40,17 @@ class AuthLogger {
           }
           
           const date = new Date().toISOString().split('T')[0];
-          const authLogFile = path.join(logDir, `auth-${date}.log`);
+          const authLogFile = path.join(logDir, `auth-errors-${date}.log`);
           
           const logLine = JSON.stringify(logEntry) + '\n';
           fs.appendFileSync(authLogFile, logLine);
         }
       } catch (error) {
-        // Silent fallback - just use console logging
-        console.error('Failed to write to auth log file:', error);
+        // Silent fallback for file writing errors
       }
     } else {
-      // Client-side auth logging with special prefix
-      const logMethod = level.toLowerCase() === 'error' ? 'error' 
-        : level.toLowerCase() === 'warn' ? 'warn'
-        : level.toLowerCase() === 'debug' ? 'debug'
-        : 'info';
-      
-      console[logMethod](`[AUTH-CLIENT-${timestamp}] ${context || 'AUTH'}: ${message}`, data || '');
-
-      // For critical logout events, also forward to server
-      const criticalContexts = ['LOGOUT', 'USER_MENU', 'LOGOUT_CLEANUP', 'SESSION'];
-      if (criticalContexts.includes(context || '')) {
-        this.forwardToServer(level, message, data, context, timestamp);
-      }
+      // Only log errors on client-side
+      console.error(`[AUTH-ERROR] ${context || 'AUTH'}: ${message}`, data || '');
     }
   }
 

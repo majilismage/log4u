@@ -33,63 +33,14 @@ export const authOptions: AuthOptions = {
   ],
   callbacks: {
     async signIn({ account, profile }) {
-      authLogger.info('NextAuth signIn callback initiated', {
-        provider: account?.provider,
-        profileExists: !!profile,
-        timestamp: Date.now()
-      }, 'SIGNIN_CALLBACK');
-
       if (account?.provider === "google") {
-        // Extensive OAuth logging
-        authLogger.info('Google OAuth signIn callback processing', {
-          provider: account.provider,
-          providerAccountId: account.providerAccountId,
-          access_token_exists: !!account.access_token,
-          access_token_length: account.access_token?.length,
-          refresh_token_exists: !!account.refresh_token,
-          refresh_token_length: account.refresh_token?.length,
-          scope: account.scope,
-          expires_at: account.expires_at,
-          token_type: account.token_type,
-          expires_in: account.expires_in,
-          profile_email: profile?.email,
-          profile_verified: (profile as any)?.email_verified
-        }, 'GOOGLE_SIGNIN');
-
-        // Log scope details
-        const receivedScopes = account.scope?.split(" ") || [];
-        authLogger.info('OAuth scopes received from Google', {
-          grantedScopes: receivedScopes,
-          scopeCount: receivedScopes.length,
-          rawScope: account.scope
-        }, 'OAUTH_SCOPES');
-
-        // Overhaul logging for deep debugging
-        logger.info('NextAuth signIn callback triggered for Google provider.');
-        logger.debug('Received account object from Google:', {
-          provider: account.provider,
-          providerAccountId: account.providerAccountId,
-          access_token_exists: !!account.access_token,
-          refresh_token_exists: !!account.refresh_token,
-          scope: account.scope,
-          expires_at: account.expires_at,
-          token_type: account.token_type,
-        });
-
-        if (account.refresh_token) {
-          authLogger.info("New refresh token received from Google", {
-            isFirstConsent: true,
-            refreshTokenLength: account.refresh_token.length,
-            timestamp: Date.now()
-          }, 'REFRESH_TOKEN');
-          logger.info("A new refresh_token was provided by Google. This should happen on the first consent.");
-        } else {
+        // Log only critical refresh token issues
+        if (!account.refresh_token) {
           authLogger.warn("No refresh token in OAuth response", {
             isSubsequentLogin: true,
             hasAccessToken: !!account.access_token,
             timestamp: Date.now()
-          }, 'REFRESH_TOKEN');
-          logger.warn("No refresh_token was provided. This is expected on subsequent logins. If you just revoked and re-granted access, this might indicate a configuration issue.");
+          }, 'TOKEN_ERROR');
         }
 
         // SECURE MANUAL TOKEN UPDATE - Fixed to prevent user account conflation
@@ -97,14 +48,6 @@ export const authOptions: AuthOptions = {
         // update tokens on every login (as documented in PROJECT.md), but we must ensure
         // we only update tokens for the correct user to prevent security issues.
         try {
-          authLogger.info('Starting secure database token update', {
-            providerAccountId: account.providerAccountId,
-            profileEmail: profile?.email,
-            hasAccessToken: !!account.access_token,
-            hasRefreshToken: !!account.refresh_token,
-            expiresAt: account.expires_at,
-            timestamp: Date.now()
-          }, 'SECURE_TOKEN_UPDATE');
 
           // SECURE TOKEN UPDATE: Update tokens using providerAccountId + provider
           // This is secure because providerAccountId is Google's unique, immutable identifier
@@ -128,35 +71,16 @@ export const authOptions: AuthOptions = {
             ]
           );
 
-          if (result.rows.length > 0) {
-            authLogger.info("Secure database token update successful", {
-              userId: result.rows[0].userId,
-              userEmail: result.rows[0].email,
-              providerAccountId: account.providerAccountId,
-              provider: account.provider,
-              rowsUpdated: result.rowCount,
-              hasStoredRefreshToken: !!result.rows[0].refresh_token,
-              timestamp: Date.now()
-            }, 'SECURE_TOKEN_UPDATE');
-            logger.info("Successfully updated tokens with security validation.", { 
-              userId: result.rows[0].userId,
-              userEmail: result.rows[0].email 
-            });
-          } else {
+          if (result.rows.length === 0) {
             authLogger.warn("Secure token update found no matching user-account combination", {
               providerAccountId: account.providerAccountId,
               provider: account.provider,
               profileEmail: profile?.email,
               timestamp: Date.now()
-            }, 'SECURE_TOKEN_UPDATE');
-            logger.warn("No matching user-account found for secure token update. This could indicate a new user or email mismatch.", { 
-              providerAccountId: account.providerAccountId,
-              profileEmail: profile?.email 
-            });
+            }, 'AUTH_ERROR');
           }
         } catch (error) {
-          authLogger.error("Secure database token update failed", error, 'SECURE_TOKEN_UPDATE');
-          logger.error("Error in secure token update during signIn callback.", { error });
+          authLogger.error("Secure database token update failed", error, 'AUTH_ERROR');
         }
 
         const requiredScopes = [
@@ -165,9 +89,6 @@ export const authOptions: AuthOptions = {
         
         // Get the granted scopes from the account
         const grantedScopes = account.scope?.split(" ") || []
-        
-        // Log detailed scope validation
-        authLogger.scopeValidation(grantedScopes, requiredScopes, account.providerAccountId);
         
         // Check if all required scopes are granted
         const hasAllRequiredScopes = requiredScopes.every(scope => 
@@ -182,85 +103,39 @@ export const authOptions: AuthOptions = {
             missingScopes,
             providerAccountId: account.providerAccountId,
             timestamp: Date.now()
-          }, 'SCOPE_VALIDATION');
+          }, 'AUTH_ERROR');
           
           // Prevent sign-in by returning false
           // This will redirect to the error page with error=AccessDenied
           return false
         }
-        
-        authLogger.info("OAuth scope validation passed", {
-          requiredScopes,
-          grantedScopes,
-          providerAccountId: account.providerAccountId,
-          timestamp: Date.now()
-        }, 'SCOPE_VALIDATION');
       }
       
-      authLogger.info("Sign-in callback completed successfully", {
-        provider: account?.provider,
-        timestamp: Date.now()
-      }, 'SIGNIN_CALLBACK');
-
       return true
     },
 
     async redirect({ url, baseUrl }) {
-      authLogger.info("NextAuth redirect callback", {
-        url,
-        baseUrl,
-        isCallback: url.includes('/api/auth/callback'),
-        isRelative: url.startsWith("/"),
-        isSignOut: url.includes('/auth/signin'),
-        timestamp: Date.now()
-      }, 'REDIRECT');
-
       // Handle sign-out redirects efficiently
       if (url.includes('/auth/signin')) {
-        authLogger.info("Redirect for sign-out detected", {
-          originalUrl: url,
-          redirectTo: `${baseUrl}/auth/signin`,
-          timestamp: Date.now()
-        }, 'REDIRECT');
         return `${baseUrl}/auth/signin`;
       }
 
       // If the URL is a callback URL, redirect to dashboard
       if (url.includes('/api/auth/callback')) {
-        authLogger.info("Redirecting to dashboard after callback", {
-          originalUrl: url,
-          redirectTo: `${baseUrl}/dashboard`,
-          timestamp: Date.now()
-        }, 'REDIRECT');
         return `${baseUrl}/dashboard`
       }
       
       // Allows relative callback URLs
       if (url.startsWith("/")) {
-        const finalUrl = `${baseUrl}${url}`;
-        authLogger.info("Processing relative URL redirect", {
-          originalUrl: url,
-          finalUrl,
-          timestamp: Date.now()
-        }, 'REDIRECT');
-        return finalUrl;
+        return `${baseUrl}${url}`;
       }
       
       // Allows callback URLs on the same origin
       if (new URL(url).origin === baseUrl) {
-        authLogger.info("Same-origin redirect", {
-          url,
-          timestamp: Date.now()
-        }, 'REDIRECT');
         return url;
       }
       
       // Default redirect to dashboard for successful sign-ins
-      authLogger.info("Default redirect to dashboard", {
-        originalUrl: url,
-        redirectTo: `${baseUrl}/dashboard`,
-        timestamp: Date.now()
-      }, 'REDIRECT');
       return `${baseUrl}/dashboard`
     },
     
@@ -271,17 +146,6 @@ export const authOptions: AuthOptions = {
       
       // Detect potential logout scenario - improved detection
       const isLogoutScenario = (!hasUser || !hasToken) && sessionExists;
-      
-      authLogger.info(`Session callback initiated${isLogoutScenario ? ' (POTENTIAL LOGOUT)' : ''}`, {
-        hasUser,
-        hasToken,
-        sessionExists,
-        userId: user?.id,
-        userEmail: user?.email,
-        hasSessionUser: !!session?.user,
-        isLogoutScenario,
-        timestamp: Date.now()
-      }, 'SESSION_CALLBACK');
 
       // SECURITY: Validate user-account consistency to prevent account conflation
       if (user?.id && session?.user?.email) {
@@ -310,22 +174,14 @@ export const authOptions: AuthOptions = {
               }, 'SECURITY_VIOLATION');
               
               // Log this critical security issue but don't break the session
-              // The secure token update should prevent this scenario
               authLogger.error("Account conflation detected - this should not happen with secure token updates", {
                 userId: user.id,
                 timestamp: Date.now()
               }, 'SECURITY_VIOLATION');
-            } else {
-              authLogger.info("User-account validation passed", {
-                userId: user.id,
-                userEmail: user.email,
-                providerAccountId: row.providerAccountId,
-                timestamp: Date.now()
-              }, 'SECURITY_VALIDATION');
             }
           }
         } catch (error) {
-          authLogger.error("Session security validation failed", error, 'SECURITY_VALIDATION');
+          authLogger.error("Session security validation failed", error, 'AUTH_ERROR');
           // Don't block the session for database errors, but log them
         }
       }
@@ -335,10 +191,7 @@ export const authOptions: AuthOptions = {
       }
 
       try {
-        authLogger.debug("Fetching tokens from database for session", {
-          userId: user.id,
-          timestamp: Date.now()
-        }, 'SESSION_TOKEN_FETCH');
+        // Fetching tokens from database for session
 
         const { rows } = await db.query(
           `
@@ -351,39 +204,17 @@ export const authOptions: AuthOptions = {
         )
 
         if (rows && rows.length > 0) {
-          const tokenExpiry = rows[0].expires_at * 1000; // Convert to milliseconds
-          const isExpired = tokenExpiry < Date.now();
-          
           session.accessToken = rows[0].access_token
           session.refreshToken = rows[0].refresh_token
-          
-          authLogger.info("Session tokens retrieved from database", {
-            userId: user.id,
-            hasAccessToken: !!rows[0].access_token,
-            hasRefreshToken: !!rows[0].refresh_token,
-            expiresAt: rows[0].expires_at,
-            accessTokenLength: rows[0].access_token?.length,
-            isExpired,
-            expiresInMinutes: isExpired ? 'EXPIRED' : Math.round((tokenExpiry - Date.now()) / 60000),
-            timestamp: Date.now()
-          }, 'SESSION_TOKEN_FETCH');
         } else {
           authLogger.warn("No tokens found in database for user session", {
             userId: user.id,
             timestamp: Date.now()
-          }, 'SESSION_TOKEN_FETCH');
+          }, 'TOKEN_ERROR');
         }
       } catch (error) {
-        authLogger.error("Error fetching tokens from database for session", error, 'SESSION_TOKEN_FETCH');
-        console.error("Error fetching tokens from DB for session:", error)
+        authLogger.error("Error fetching tokens from database for session", error, 'AUTH_ERROR');
       }
-
-      authLogger.info("Session callback completed", {
-        userId: user.id,
-        hasAccessToken: !!session.accessToken,
-        hasRefreshToken: !!session.refreshToken,
-        timestamp: Date.now()
-      }, 'SESSION_CALLBACK');
 
       return session
     },
