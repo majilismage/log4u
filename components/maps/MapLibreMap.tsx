@@ -5,6 +5,13 @@ import Map, { Marker, Source, Layer, MapRef } from 'react-map-gl/maplibre';
 import { Button } from '@/components/ui/button';
 import { useUnits } from '@/lib/UnitsContext';
 import { distanceToZoomLevel } from '@/lib/unit-conversions';
+import { 
+  TILE_PROVIDERS, 
+  selectTileProvider, 
+  getTileProviderStyle,
+  getSatelliteStyle,
+  getHybridStyle 
+} from '@/lib/mapTileProviders';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 interface LocationInfo {
@@ -55,6 +62,7 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
   const [isLoadingLastLocation, setIsLoadingLastLocation] = useState(true);
   const [currentMousePos, setCurrentMousePos] = useState<[number, number] | null>(null);
   const [mapStyle, setMapStyle] = useState<'street' | 'satellite' | 'hybrid'>('street');
+  const [currentTileProvider, setCurrentTileProvider] = useState(TILE_PROVIDERS.stadia);
   const [viewState, setViewState] = useState({
     longitude: 0,
     latitude: 20,
@@ -81,88 +89,26 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
     lines: { dynamic: null, static: null }
   });
 
-  // Memoized map style configurations for performance
+  // Initialize tile provider on component mount
+  useEffect(() => {
+    const initializeTileProvider = async () => {
+      try {
+        const provider = await selectTileProvider();
+        setCurrentTileProvider(provider);
+        console.log('Initialized with tile provider:', provider.name);
+      } catch (error) {
+        console.error('Failed to select tile provider:', error);
+      }
+    };
+    initializeTileProvider();
+  }, []);
+
+  // Memoized map style configurations based on current tile provider
   const mapStyleConfigs = useMemo(() => ({
-    street: {
-      version: 8,
-      sources: {
-        'osm-raster': {
-          type: 'raster' as const,
-          tiles: [
-            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
-          ],
-          tileSize: 256,
-          maxzoom: 19,
-          attribution: '© OpenStreetMap contributors'
-        }
-      },
-      layers: [
-        {
-          id: 'osm-raster-layer',
-          type: 'raster',
-          source: 'osm-raster'
-        }
-      ]
-    },
-    satellite: {
-      version: 8,
-      sources: {
-        'satellite': {
-          type: 'raster' as const,
-          tiles: [
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-          ],
-          tileSize: 256,
-          maxzoom: 19,
-          attribution: '© Esri, Maxar, Earthstar Geographics'
-        }
-      },
-      layers: [
-        {
-          id: 'satellite-layer',
-          type: 'raster',
-          source: 'satellite'
-        }
-      ]
-    },
-    hybrid: {
-      version: 8,
-      sources: {
-        'satellite': {
-          type: 'raster' as const,
-          tiles: [
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-          ],
-          tileSize: 256,
-          maxzoom: 19,
-          attribution: '© Esri, Maxar, Earthstar Geographics'
-        },
-        'osm-labels': {
-          type: 'raster' as const,
-          tiles: [
-            'https://tiles.stadiamaps.com/tiles/stamen_toner_labels/{z}/{x}/{y}.png'
-          ],
-          tileSize: 256,
-          maxzoom: 18,
-          attribution: '© Stadia Maps, © Stamen Design, © OpenStreetMap contributors'
-        }
-      },
-      layers: [
-        {
-          id: 'satellite-layer',
-          type: 'raster',
-          source: 'satellite'
-        },
-        {
-          id: 'labels-layer',
-          type: 'raster',
-          source: 'osm-labels'
-        }
-      ]
-    }
-  }), []);
+    street: getTileProviderStyle(currentTileProvider),
+    satellite: getSatelliteStyle(),
+    hybrid: getHybridStyle()
+  }), [currentTileProvider]);
 
   // Custom tile preloading function
   const preloadTilesForLocation = useCallback((lng: number, lat: number, zoom: number) => {
@@ -179,14 +125,17 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
       const sourceId = `preload-${z}-${Date.now()}`;
       
       try {
-        mapRef.current?.addSource(sourceId, {
-          type: 'raster',
-          tiles: mapStyleConfigs[mapStyle].sources[
-            mapStyle === 'satellite' ? 'satellite' : 'osm-raster'
-          ].tiles,
-          tileSize: 256,
-          bounds: [lng - radius, lat - radius, lng + radius, lat + radius]
-        });
+        const source = mapStyleConfigs[mapStyle].sources[
+          mapStyle === 'satellite' ? 'satellite' : 'osm-raster'
+        ];
+        if (source && 'tiles' in source) {
+          mapRef.current?.addSource(sourceId, {
+            type: 'raster',
+            tiles: source.tiles,
+            tileSize: 256,
+            bounds: [lng - radius, lat - radius, lng + radius, lat + radius]
+          });
+        }
         
         // Remove preload source after brief moment
         setTimeout(() => {
@@ -331,12 +280,22 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
     
     console.log('🗺️ Map loaded:', {
       totalLoadTime: `${(loadEnd - loadMetrics.mapLoadStart).toFixed(2)}ms`,
-      lastLocationTime: `${loadMetrics.lastLocationLoadTime.toFixed(2)}ms`
+      lastLocationTime: `${loadMetrics.lastLocationLoadTime.toFixed(2)}ms`,
+      tileProvider: currentTileProvider.name
     });
     
-    // Set up tile load monitoring
+    // Ensure map renders properly and tiles are loaded
     if (mapRef.current) {
-      mapRef.current.on('sourcedata', (e) => {
+      const map = mapRef.current;
+      
+      // Force a resize and repaint to ensure proper rendering
+      setTimeout(() => {
+        map.resize();
+        map.triggerRepaint();
+      }, 100);
+      
+      // Set up tile load monitoring
+      map.on('sourcedata', (e) => {
         if (e.sourceDataType === 'metadata') {
           setLoadMetrics(prev => ({
             ...prev,
@@ -345,11 +304,38 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
         }
       });
     }
-  }, [loadMetrics.mapLoadStart, loadMetrics.lastLocationLoadTime]);
+  }, [loadMetrics.mapLoadStart, loadMetrics.lastLocationLoadTime, currentTileProvider]);
 
-  const handleMapError = useCallback((error: any) => {
-    console.error('🗺️ Map error:', error);
-  }, []);
+  const handleMapError = useCallback(async (error: any) => {
+    // Extract error details properly
+    const errorDetails = error?.error || error?.target?.error || error;
+    const errorMessage = errorDetails?.message || errorDetails?.statusText || 'Unknown error';
+    const errorSource = error?.source || error?.target?.src || '';
+    
+    // Only log meaningful errors (not empty objects)
+    if (errorMessage !== 'Unknown error' || errorSource) {
+      console.error('🗺️ Map error:', {
+        message: errorMessage,
+        source: errorSource,
+        type: error?.type || 'unknown'
+      });
+    }
+    
+    // If tile loading fails, try switching to fallback provider
+    if (errorMessage.includes('tile') || 
+        errorMessage.includes('404') ||
+        errorMessage.includes('Failed to fetch') ||
+        errorSource.includes('.png') ||
+        error?.source === 'osm-raster') {
+      console.warn('Tile loading error detected, attempting fallback...');
+      
+      // Switch to Carto if we're on Stadia, otherwise keep trying
+      if (currentTileProvider.name === 'Stadia Maps') {
+        setCurrentTileProvider(TILE_PROVIDERS.cartoFallback);
+        console.log('Switched to fallback tile provider: Carto');
+      }
+    }
+  }, [currentTileProvider]);
 
   // Handle map click
   const handleMapClick = useCallback(async (event: any) => {
@@ -481,25 +467,17 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
         onClick={handleMapClick}
         onMouseMove={throttledMouseMove}
         cursor={mode === 'journey' ? 'crosshair' : 'pointer'}
+        aria-label="Interactive map"
         // Performance optimizations
-        maxTileCacheSize={200}
-        maxTileCacheZoomLevels={5}
+        maxTileCacheSize={500}  // Increased for better caching
+        maxTileCacheZoomLevels={8}  // Cache more zoom levels
         localIdeographFontFamily={false}
         // Advanced performance optimizations
         onLoad={handleMapLoad}
         onError={handleMapError}
         transformRequest={(url, resourceType) => {
-          // Enhanced caching and request optimization
-          if (resourceType === 'Tile') {
-            return {
-              url,
-              headers: {
-                'Cache-Control': 'max-age=86400', // 24 hours
-                'ETag': 'enabled',
-                'If-None-Match': '*'
-              }
-            };
-          }
+          // Don't add custom headers for tiles to avoid CORS preflight
+          // Let the browser handle caching naturally
           return { url };
         }}
         // Additional performance settings
@@ -508,6 +486,10 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
         failIfMajorPerformanceCaveat={false}
         crossSourceCollisions={false}
         optimizeForTerrain={false}
+        // Fix for blurry tiles
+        refreshExpiredTiles={true}
+        collectResourceTiming={true}
+        fadeDuration={0}  // Disable fade-in animation for tiles
       >
         {/* Crosshair marker for first click */}
         {mode === 'journey' && journeyState.markers.crosshair && journeyState.fromLocation && (
