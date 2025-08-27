@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     const response = await drive.files.create({
       requestBody: fileMetadata,
       media: media,
-      fields: 'id, webViewLink, webContentLink',
+      fields: 'id, webViewLink, webContentLink, thumbnailLink',
     });
     
     logger.info('UPLOAD-MEDIA: Upload completed successfully with metadata', { 
@@ -82,6 +82,7 @@ export async function POST(request: Request) {
       success: true,
       fileId: response.data.id,
       webViewLink: response.data.webViewLink,
+      thumbnailLink: response.data.thumbnailLink,
       mediaType: file.type.startsWith('image/') ? 'image' : 'video'
     });
 

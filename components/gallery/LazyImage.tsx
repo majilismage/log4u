@@ -57,7 +57,8 @@ export function LazyImage({
       onError(e)
     } else {
       const target = e.currentTarget as HTMLImageElement
-      target.src = 'https://via.placeholder.com/150?text=Error'
+      // Use a data URI for error placeholder to avoid network requests
+      target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150"%3E%3Crect width="150" height="150" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-family="system-ui" font-size="14"%3ENo Image%3C/text%3E%3C/svg%3E'
       target.onerror = null
     }
   }

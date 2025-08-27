@@ -66,9 +66,18 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
 
       <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
         {media.map((item) => {
-          const thumbnailUrl = item.thumbnailLink 
-            ? `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/thumbnail-proxy?url=${encodeURIComponent(item.thumbnailLink)}` 
-            : 'https://via.placeholder.com/150?text=No+Thumbnail';
+          // For images, construct a Google Drive thumbnail URL
+          // For videos or files without thumbnails, show a placeholder
+          let thumbnailUrl = ''
+          if (item.thumbnailLink) {
+            thumbnailUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/thumbnail-proxy?url=${encodeURIComponent(item.thumbnailLink)}`
+          } else if (item.mimeType?.startsWith('image/')) {
+            // Use Google Drive's thumbnail service for images
+            thumbnailUrl = `https://drive.google.com/thumbnail?id=${item.id}&sz=w200`
+          } else {
+            // Use data URI placeholder for videos or unknown types
+            thumbnailUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150"%3E%3Crect width="150" height="150" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-family="system-ui" font-size="14"%3E%3C/text%3E%3C/svg%3E'
+          }
           
           return (
             <div key={item.id} className="aspect-square relative group bg-slate-100 dark:bg-neutral-700 rounded-md overflow-hidden">
