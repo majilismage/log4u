@@ -137,7 +137,23 @@ export function HistoryTab() {
               </p>
               {journeys.map((journey, index) => {
                 const uniqueKey = journey.id && journey.id !== "" && journey.id !== "undefined" ? journey.id : `journey-${index}`;
-                return <HistoryEntryCard key={uniqueKey} journey={journey} />;
+                return (
+                  <HistoryEntryCard 
+                    key={uniqueKey} 
+                    journey={journey}
+                    isEditable={true}
+                    onUpdate={(updates) => {
+                      // Update local state optimistically
+                      setJourneys(prev => prev.map(j => 
+                        j.id === journey.id ? { ...j, ...updates } : j
+                      ))
+                    }}
+                    onError={(error) => {
+                      console.error('Error updating journey:', error)
+                      setError(error) // Use existing error state
+                    }}
+                  />
+                );
               })}
             </div>
           ) : (

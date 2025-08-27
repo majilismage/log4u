@@ -10,8 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
 
-### No Test Suite
-This project does not include a test suite. Manual testing should be performed through the development server.
+### Testing
+- **Test Framework**: Jest with React Testing Library
+- **Test-First Approach**: Write tests before implementing features
+- **Run Tests**: `npm test`
+- **Test Coverage**: `npm run test:coverage`
 
 ## Project Architecture
 
@@ -138,6 +141,15 @@ useEffect(() => {
 - Use `psql -d database_url -f migration_file.sql` for manual migration
 
 ## Development Guidelines
+
+### Development Philosophy
+- **Lean Code First**: Prioritize simple, maintainable solutions over complex features
+- **Test-Driven Development (TDD)**: Write tests before implementation for all new features
+- **Single Responsibility**: Each component/function should do one thing well
+- **DRY Principle**: Reuse existing utilities and components wherever possible
+- **Minimal API Surface**: Fewer, more flexible endpoints over many specific ones
+- **Progressive Enhancement**: Start with core functionality, add features incrementally
+- **Code Metrics**: Functions < 20 lines, files < 200 lines, test coverage > 90%
 
 ### Critical Patterns
 - **Mapping**: Currently using Leaflet with manual instance management (migrating to MapLibre GL JS)
