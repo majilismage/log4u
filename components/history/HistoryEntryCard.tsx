@@ -206,20 +206,43 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
 
         const data = await response.json()
         
-        // If API returns media details, add to list
-        if (data.media) {
-          uploadedMedia.push(data.media)
+        // Create a media item from the uploaded file
+        if (data.success && data.fileId) {
+          const newMediaItem: MediaItem = {
+            id: data.fileId,
+            name: file.name,
+            thumbnailLink: data.thumbnailLink || '',
+            webViewLink: data.webViewLink || `https://drive.google.com/file/d/${data.fileId}/view`,
+            mimeType: file.type
+          }
+          uploadedMedia.push(newMediaItem)
         }
       }
       
-      // Update local media state
+      // Always update local media state without reloading
       if (uploadedMedia.length > 0) {
         const updatedMedia = [...localMedia, ...uploadedMedia]
         setLocalMedia(updatedMedia)
-        onUpdate?.({ media: updatedMedia })
-      } else {
-        // Fallback: reload to get updated media list
-        window.location.reload()
+        
+        // Also update the parent component if callback provided
+        if (onUpdate) {
+          onUpdate({ media: updatedMedia })
+        }
+        
+        // If in edit mode, update the journey's media links
+        if (isEditing) {
+          const imageLinks = updatedMedia
+            .filter(m => m.mimeType?.startsWith('image/'))
+            .map(m => m.webViewLink)
+            .join(',')
+          const videoLinks = updatedMedia
+            .filter(m => m.mimeType?.startsWith('video/'))  
+            .map(m => m.webViewLink)
+            .join(',')
+          
+          updateField('imagesLink', imageLinks)
+          updateField('videosLink', videoLinks)
+        }
       }
     } catch (error) {
       onError?.(error instanceof Error ? error.message : 'Failed to upload files')
