@@ -66,6 +66,46 @@ The main entry interface is `components/new-entry/NewEntryTab.tsx` with these se
 
 ### Critical Implementation Notes
 
+#### Google Drive API Upload Pattern
+**CRITICAL**: When uploading files to Google Drive, you MUST inline the request objects directly in the `drive.files.create()` call. Do NOT create separate variables for `requestBody` or `media` objects.
+
+**✅ CORRECT - This works:**
+```javascript
+const response = await drive.files.create({
+  requestBody: {
+    name: file.name,
+    parents: [folderId],
+    appProperties: { journeyId: 'abc' }
+  },
+  media: {
+    mimeType: file.type,
+    body: stream
+  },
+  fields: 'id, webViewLink'
+});
+```
+
+**❌ INCORRECT - This causes 500 "Unknown Error":**
+```javascript
+const fileMetadata = {
+  name: file.name,
+  parents: [folderId],
+  appProperties: { journeyId: 'abc' }
+};
+const media = {
+  mimeType: file.type,
+  body: stream
+};
+// This will fail with 500 error!
+const response = await drive.files.create({
+  requestBody: fileMetadata,
+  media: media,
+  fields: 'id, webViewLink'
+});
+```
+
+This issue was discovered after extensive debugging - the Google Drive API returns a cryptic "Unknown Error" when objects are passed as variables rather than inlined.
+
 #### MapLibre GL JS Maps
 **MIGRATION IN PROGRESS**: Migrating from Leaflet to MapLibre GL JS for better performance and React integration.
 
@@ -156,6 +196,7 @@ useEffect(() => {
 - **Context Isolation**: Wrap client providers in `ClientProviders.tsx` to prevent ChunkLoadError  
 - **Form Validation**: Use React Hook Form with Zod validation for all forms
 - **Error Boundaries**: Implement proper error boundaries for all API calls
+- **Git Commits**: DO NOT commit to git until changes have been manually tested end-to-end
 
 ### API Design
 - RESTful endpoints with proper HTTP methods and error handling

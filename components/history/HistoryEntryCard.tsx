@@ -69,10 +69,14 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
           // For images, construct a Google Drive thumbnail URL
           // For videos or files without thumbnails, show a placeholder
           let thumbnailUrl = ''
-          if (item.thumbnailLink) {
+          if (item.thumbnailLink && item.thumbnailLink.startsWith('https://drive.google.com/thumbnail?')) {
+            // Direct Google Drive thumbnail URLs don't need proxy
+            thumbnailUrl = item.thumbnailLink
+          } else if (item.thumbnailLink) {
+            // Other thumbnail URLs might need proxy
             thumbnailUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/thumbnail-proxy?url=${encodeURIComponent(item.thumbnailLink)}`
           } else if (item.mimeType?.startsWith('image/')) {
-            // Use Google Drive's thumbnail service for images
+            // Use Google Drive's thumbnail service for images without thumbnails
             thumbnailUrl = `https://drive.google.com/thumbnail?id=${item.id}&sz=w200`
           } else {
             // Use data URI placeholder for videos or unknown types
@@ -150,6 +154,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string>('')
   const [localMedia, setLocalMedia] = useState(journey.media || [])
+  const [hasMediaChanges, setHasMediaChanges] = useState(false)
 
   const {
     isEditing,
@@ -165,7 +170,9 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
 
   const handleSave = async () => {
     const result = await save()
-    if (!result.success && result.error) {
+    if (result.success) {
+      setHasMediaChanges(false)
+    } else if (result.error) {
       // Error is already handled by the hook
     }
   }
@@ -200,6 +207,13 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
         const file = files[i]
         setUploadProgress(`${file.name} (${i + 1}/${files.length})`)
         
+        console.log('[Upload] Starting upload for file:', {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          journeyId: journey.id
+        })
+        
         const formData = new FormData()
         formData.append('file', file)
         formData.append('journeyId', journey.id)
@@ -209,11 +223,29 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
           body: formData
         })
 
+        console.log('[Upload] Response status:', response.status)
+
         if (!response.ok) {
-          throw new Error(`Failed to upload ${file.name}`)
+          const errorText = await response.text()
+          console.error('[Upload] Error response:', errorText)
+          let errorMessage = `Failed to upload ${file.name}`
+          let errorDetails = null
+          try {
+            const errorJson = JSON.parse(errorText)
+            errorMessage = errorJson.error || errorMessage
+            errorDetails = errorJson.details
+            if (errorDetails) {
+              console.error('[Upload] Error details:', errorDetails)
+            }
+          } catch (e) {
+            // If not JSON, use the text directly
+            if (errorText) errorMessage = errorText
+          }
+          throw new Error(errorMessage)
         }
 
         const data = await response.json()
+        console.log('[Upload] Response data:', data)
         
         // Create a media item from the uploaded file
         if (data.success && data.fileId) {
@@ -222,9 +254,14 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
             name: file.name,
             thumbnailLink: data.thumbnailLink || '',
             webViewLink: data.webViewLink || `https://drive.google.com/file/d/${data.fileId}/view`,
-            mimeType: file.type
+            mimeType: file.type,
+            journeyId: journey.id,
+            createdTime: new Date().toISOString()
           }
+          console.log('[Upload] Created media item:', newMediaItem)
           uploadedMedia.push(newMediaItem)
+        } else {
+          console.warn('[Upload] Unexpected response format:', data)
         }
       }
       
@@ -232,6 +269,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
       if (uploadedMedia.length > 0) {
         const updatedMedia = [...localMedia, ...uploadedMedia]
         setLocalMedia(updatedMedia)
+        setHasMediaChanges(true)
         
         // Also update the parent component if callback provided
         if (onUpdate) {
@@ -239,19 +277,8 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
         }
         
         // If in edit mode, update the journey's media links
-        if (isEditing) {
-          const imageLinks = updatedMedia
-            .filter(m => m.mimeType?.startsWith('image/'))
-            .map(m => m.webViewLink)
-            .join(',')
-          const videoLinks = updatedMedia
-            .filter(m => m.mimeType?.startsWith('video/'))  
-            .map(m => m.webViewLink)
-            .join(',')
-          
-          updateField('imagesLink', imageLinks)
-          updateField('videosLink', videoLinks)
-        }
+        // Media is stored separately in Google Drive, not in the journey sheet
+        // No need to update journey fields for media
       }
     } catch (error) {
       onError?.(error instanceof Error ? error.message : 'Failed to upload files')
@@ -322,7 +349,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
                 size="sm"
                 variant="default"
                 onClick={handleSave}
-                disabled={isSaving || !hasChanges()}
+                disabled={isSaving || (!hasChanges() && !hasMediaChanges)}
                 aria-label="Save changes"
               >
                 {isSaving ? (
@@ -340,7 +367,10 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={cancel}
+                onClick={() => {
+                  cancel()
+                  setHasMediaChanges(false)
+                }}
                 disabled={isSaving}
                 aria-label="Cancel editing"
               >
