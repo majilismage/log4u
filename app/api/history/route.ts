@@ -44,7 +44,7 @@ export async function GET() {
         }
       });
       return journeyObject;
-    }).sort((a, b) => new Date(b.arrivalDate).getTime() - new Date(a.arrivalDate).getTime()); // Sort by most recent arrival
+    }).sort((a, b) => new Date(b.departureDate).getTime() - new Date(a.departureDate).getTime()); // Sort by most recent start
 
     const sheetJourneyIds = data.map(entry => entry.journeyId).filter(id => id);
     logger.info('HISTORY: Successfully fetched history entries', {

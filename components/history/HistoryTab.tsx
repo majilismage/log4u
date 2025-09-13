@@ -85,9 +85,9 @@ export function HistoryTab() {
         ...journey,
         media: mediaByJourneyId[journey.id] || []
       }));
-      
+
       setJourneys(combinedData);
-      console.log('[HistoryTab] State "journeys" set with combined data:', combinedData);
+      console.log('[HistoryTab] State "journeys" set with combined data (server-sorted by departureDate desc):', combinedData);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
