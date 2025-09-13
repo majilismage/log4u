@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { useLoading } from "@/lib/LoadingContext"
+import { useToast } from "@/hooks/use-toast"
 import { FilePreview } from "@/components/FilePreview"
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete"
 import type { JourneyEntry } from "@/types/journey"
@@ -54,6 +55,7 @@ export function NewEntryTab() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const { setLoading, setProgress } = useLoading()
   const { unitConfig, isLoading: unitsLoading } = useUnits()
+  const { toast } = useToast()
 
   const updateDistanceIfPossible = (fromLat: string, fromLng: string, toLat: string, toLng: string) => {
     if (fromLat && fromLng && toLat && toLng && !unitsLoading) {
@@ -243,7 +245,13 @@ export function NewEntryTab() {
         await uploadFiles(officialJourneyId);
       }
 
-      // 3. Reset form state on successful submission
+      // 3. Show success confirmation toast
+      toast({
+        title: "Journey saved",
+        description: `${fromTown || 'From'} → ${toTown || 'To'} (${format(departureDate, 'PPP')} – ${format(arrivalDate, 'PPP')})`,
+      })
+
+      // 4. Reset form state on successful submission
       setJourneyId("");
       setFromTown("");
       setFromCountry("");
@@ -261,11 +269,16 @@ export function NewEntryTab() {
 
     } catch (error) {
       console.error('Error processing entry:', error);
-      // TODO: Show a user-friendly error message in the UI
+      // Show error toast consistent with app design
+      toast({
+        title: "Failed to save journey",
+        description: "Please try again.",
+        variant: "destructive",
+      })
       setLoading(false, 'An error occurred. Please try again.');
     } finally {
-      // Set a success message and turn off loading state
-      setLoading(false, 'Entry saved successfully!');
+      // Turn off loading state
+      setLoading(false);
     }
   };
 
