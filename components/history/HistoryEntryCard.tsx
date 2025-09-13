@@ -10,6 +10,8 @@ import DropZone from '@/components/ui/drop-zone'
 import { useEditableJourney } from '@/hooks/useEditableJourney'
 import { Button } from '@/components/ui/button'
 import { Edit2, Save, X, Loader2, Trash2, Plus, Upload } from 'lucide-react'
+import { format, parseISO, isValid } from 'date-fns'
+import { useEnglishPlaceName } from '@/hooks/useEnglishPlaceName'
 
 const PlayIcon = () => (
   <svg className="w-8 h-8 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -167,6 +169,33 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
     getValue,
     hasChanges
   } = useEditableJourney(journey, { onUpdate, onError })
+
+  // Ensure place names are displayed in English using reverse geocoding when needed
+  const fromEnglish = useEnglishPlaceName(
+    journey.fromTown,
+    journey.fromCountry,
+    journey.fromLatitude,
+    journey.fromLongitude
+  )
+  const toEnglish = useEnglishPlaceName(
+    journey.toTown,
+    journey.toCountry,
+    journey.toLatitude,
+    journey.toLongitude
+  )
+
+  const formatDate = (dateString: string): string => {
+    if (!dateString || dateString.trim() === '') return 'N/A'
+    try {
+      const date = parseISO(dateString)
+      if (isValid(date)) {
+        return format(date, 'MMM dd, yyyy')
+      }
+      return dateString
+    } catch {
+      return dateString
+    }
+  }
 
   const handleSave = async () => {
     const result = await save()
@@ -331,20 +360,24 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
     <div className="bg-white dark:bg-neutral-800 shadow-lg dark:shadow-neutral-900/50 rounded-xl overflow-hidden border border-slate-200 dark:border-neutral-700 transition-shadow duration-300 ease-in-out">
       {/* Edit controls */}
       {isEditable && (
-        <div className="p-2 border-b border-slate-200 dark:border-neutral-700 flex justify-end gap-2">
-          {!isEditing ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setIsEditing(true)}
-              aria-label="Edit journey"
-              data-testid="edit-toggle"
-            >
-              <Edit2 className="h-4 w-4 mr-1" />
-              Edit
-            </Button>
-          ) : (
-            <>
+        <div className="p-2 border-b border-slate-200 dark:border-neutral-700 flex items-center justify-between">
+          <div className="text-sm text-slate-600 dark:text-neutral-300">
+            {formatDate(journey.departureDate)} — {formatDate(journey.arrivalDate)}
+          </div>
+          <div className="flex gap-2">
+            {!isEditing ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsEditing(true)}
+                aria-label="Edit journey"
+                data-testid="edit-toggle"
+              >
+                <Edit2 className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            ) : (
+              <>
               <Button
                 size="sm"
                 variant="default"
@@ -377,8 +410,9 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
                 <X className="h-4 w-4 mr-1" />
                 Cancel
               </Button>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -432,10 +466,10 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
               </div>
             ) : (
               <JourneyMetadata 
-                fromTown={journey.fromTown}
-                fromCountry={journey.fromCountry}
-                toTown={journey.toTown}
-                toCountry={journey.toCountry}
+                fromTown={fromEnglish.city}
+                fromCountry={fromEnglish.country}
+                toTown={toEnglish.city}
+                toCountry={toEnglish.country}
                 departureDate={journey.departureDate}
                 arrivalDate={journey.arrivalDate}
                 distance={getValue('distance') as string}

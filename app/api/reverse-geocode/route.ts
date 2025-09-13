@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
     
     const response = await fetch(nominatimUrl, {
       headers: {
-        'User-Agent': 'WanderNote/1.0 (Travel Log App)'
+        'User-Agent': 'WanderNote/1.0 (Travel Log App)',
+        'Accept-Language': 'en'
       }
     });
 

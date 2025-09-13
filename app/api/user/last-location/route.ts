@@ -72,14 +72,37 @@ export async function GET() {
       coordinates: { lat, lng }
     });
 
+    // Attempt to resolve English city/country using Nominatim
+    let cityEn = mostRecentJourney.toTown;
+    let countryEn = mostRecentJourney.toCountry;
+    try {
+      const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`;
+      const res = await fetch(nominatimUrl, {
+        headers: {
+          'User-Agent': 'WanderNote/1.0 (Travel Log App)',
+          'Accept-Language': 'en'
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const address = data?.address || {};
+        const city = address.city || address.town || address.village || address.municipality || address.hamlet || '';
+        const country = address.country || '';
+        cityEn = city || cityEn;
+        countryEn = country || countryEn;
+      }
+    } catch (e) {
+      // On failure, fall back to sheet-provided names
+    }
+
     return NextResponse.json({
       success: true,
       hasLocation: true,
       location: {
         lat,
         lng,
-        city: mostRecentJourney.toTown,
-        country: mostRecentJourney.toCountry,
+        city: cityEn,
+        country: countryEn,
         arrivalDate: mostRecentJourney.arrivalDate
       }
     });
