@@ -10,8 +10,11 @@ const columnHeaders = [
   'notes', 'imagesLink', 'videosLink', 'timestamp'
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url)
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0)
+    const limit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '10', 10) || 10))
     const { auth, googleSheetsId } = await getAuthenticatedClient();
 
     if (!googleSheetsId) {
@@ -75,6 +78,9 @@ export async function GET() {
       return journeyObject;
     }).sort((a, b) => new Date(b.departureDate).getTime() - new Date(a.departureDate).getTime()); // Sort by most recent start
 
+    const totalCount = data.length;
+    const pageData = data.slice(offset, Math.min(offset + limit, totalCount))
+
     const sheetJourneyIds = data.map(entry => entry.journeyId).filter(id => id);
     logger.info('HISTORY: Successfully fetched history entries', {
       recordCount: data.length,
@@ -87,12 +93,15 @@ export async function GET() {
       }))
     });
 
-    logger.info(`Successfully fetched ${data.length} history entries for the user.`);
+    logger.info(`Successfully fetched ${pageData.length}/${totalCount} history entries for the user.`, { offset, limit });
 
     return NextResponse.json({
       success: true,
-      recordCount: data.length,
-      data,
+      recordCount: pageData.length,
+      totalCount,
+      offset,
+      limit,
+      data: pageData,
     });
 
   } catch (error: any) {

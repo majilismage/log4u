@@ -14,6 +14,7 @@ export interface LegacySheetRow {
   totalDistance?: string | number
   country?: string
   notes?: string
+  migrated?: string
 }
 
 export interface GeoPoint { lat: number; lng: number }
@@ -90,7 +91,8 @@ export function parseLegacyWorkbook(buffer: Buffer): LegacySheetRow[] {
       maxSpeed: mapped['max speed'] ?? '',
       totalDistance: mapped['total distance'] ?? '',
       country: mapped['country'] ?? '',
-      notes: mapped['notes'] ?? ''
+      notes: mapped['notes'] ?? '',
+      migrated: mapped['migrated'] ?? ''
     }
     return rec
   })
@@ -130,8 +132,11 @@ export async function buildImportCandidates(
   const candidates: ImportCandidate[] = []
   let lastKnown: GeoPoint | undefined = seedLastKnown
 
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i]
+  const isYes = (v?: string) => typeof v === 'string' && v.trim().toLowerCase() === 'yes'
+  const eligibleRows = rows.filter(r => !isYes(r.migrated))
+
+  for (let i = 0; i < eligibleRows.length; i++) {
+    const r = eligibleRows[i]
     const fromTown = String(r.from || '').trim()
     const toTown = String(r.to || '').trim()
     const country = String(r.country || '').trim()

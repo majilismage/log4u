@@ -22,12 +22,14 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     const rows = parseLegacyWorkbook(buffer)
-    const total = rows.length
+    // Filter out rows marked as migrated: 'yes'
+    const filtered = rows.filter(r => String((r as any).migrated || '').trim().toLowerCase() !== 'yes')
+    const total = filtered.length
 
     const offset = Math.max(0, parseInt(offsetStr || '0', 10) || 0)
     const count = Math.max(1, Math.min(50, parseInt(countStr || '10', 10) || 10))
 
-    const slice = rows.slice(offset, Math.min(offset + count, total))
+    const slice = filtered.slice(offset, Math.min(offset + count, total))
     const seedLastKnown = seedLatStr && seedLngStr ? { lat: parseFloat(seedLatStr), lng: parseFloat(seedLngStr) } : undefined
     const { candidates, lastKnown } = await buildImportCandidates(slice, seedLastKnown)
 

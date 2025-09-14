@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, ChevronDownIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -303,18 +303,26 @@ export function NewEntryTab() {
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal h-12 px-4 text-base",
+                        "w-full justify-between text-left font-normal h-12 px-4 text-base",
                         !departureDate && "text-muted-foreground",
                       )}
                     >
-                      <CalendarIcon className="mr-3 h-5 w-5" />
-                      {departureDate ? format(departureDate, "PPP") : <span>Pick departure date</span>}
+                      <span className="flex items-center gap-3">
+                        <CalendarIcon className="h-5 w-5" />
+                        {departureDate ? format(departureDate, "dd MMMM yyyy") : <span>Pick departure date</span>}
+                      </span>
+                      <ChevronDownIcon className="h-4 w-4 opacity-70" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={departureDate}
+                      captionLayout="dropdown"
+                      fromYear={1900}
+                      toYear={new Date().getFullYear()}
+                      components={{ IconLeft: () => null, IconRight: () => null }}
+                      classNames={{ caption_label: "hidden" }}
                       onSelect={(date) => {
                         if (date) {
                           setDepartureDate(date)
@@ -334,18 +342,26 @@ export function NewEntryTab() {
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal h-12 px-4 text-base",
+                        "w-full justify-between text-left font-normal h-12 px-4 text-base",
                         !arrivalDate && "text-muted-foreground",
                       )}
                     >
-                      <CalendarIcon className="mr-3 h-5 w-5" />
-                      {arrivalDate ? format(arrivalDate, "PPP") : <span>Pick arrival date</span>}
+                      <span className="flex items-center gap-3">
+                        <CalendarIcon className="h-5 w-5" />
+                        {arrivalDate ? format(arrivalDate, "dd MMMM yyyy") : <span>Pick arrival date</span>}
+                      </span>
+                      <ChevronDownIcon className="h-4 w-4 opacity-70" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={arrivalDate}
+                      captionLayout="dropdown"
+                      fromYear={1900}
+                      toYear={new Date().getFullYear()}
+                      components={{ IconLeft: () => null, IconRight: () => null }}
+                      classNames={{ caption_label: "hidden" }}
                       onSelect={(date) => {
                         if (date) {
                           setArrivalDate(date)

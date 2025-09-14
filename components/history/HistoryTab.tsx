@@ -21,14 +21,18 @@ export function HistoryTab() {
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const { unitPreferences } = useUnits()
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 10
+  const [total, setTotal] = useState(0)
 
-  const fetchData = async () => {
+  const fetchData = async (pageIndex: number) => {
     console.log('[HistoryTab] fetchData called');
     setIsLoading(true);
     setError(null);
     try {
+      const offset = pageIndex * PAGE_SIZE
       const [historyResponse, mediaResponse] = await Promise.all([
-        fetch('/api/history'),
+        fetch(`/api/history?offset=${offset}&limit=${PAGE_SIZE}`),
         fetch('/api/get-media')
       ]);
 
@@ -46,6 +50,8 @@ export function HistoryTab() {
       console.log('[HistoryTab] Raw API response for media:', mediaResult);
 
       const rawHistoryData = historyResult.data || [];
+      const totalCount = historyResult.totalCount ?? rawHistoryData.length
+      setTotal(totalCount)
       const historyData: JourneyEntry[] = rawHistoryData.map((j: any) => {
         // Convert journey data from stored units (default) to user's preferred units
         const convertedData = convertJourneyToUserUnits(
@@ -100,8 +106,8 @@ export function HistoryTab() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [unitPreferences]);
+    fetchData(page);
+  }, [unitPreferences, page]);
 
   return (
     <Card className="dark:bg-neutral-800 border-slate-200 dark:border-neutral-700">
@@ -133,8 +139,12 @@ export function HistoryTab() {
           journeys.length > 0 ? (
             <div className="space-y-6">
               <p className="text-lg text-slate-700 dark:text-neutral-300">
-                Successfully loaded {journeys.length} journey entries.
+                Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + journeys.length} of {total}
               </p>
+              <div className="flex gap-2">
+                <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
+                <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
+              </div>
               {journeys.map((journey, index) => {
                 const uniqueKey = journey.id && journey.id !== "" && journey.id !== "undefined" ? journey.id : `journey-${index}`;
                 return (
@@ -154,10 +164,22 @@ export function HistoryTab() {
                     }}
                     onDelete={(journeyId) => {
                       setJourneys(prev => prev.filter(j => j.id !== journeyId))
+                      setTotal(t => Math.max(0, t - 1))
+                      // If page becomes empty and not first page, move back a page
+                      if (journeys.length === 1 && page > 0) {
+                        setPage(p => p - 1)
+                      } else {
+                        // Refresh current page to keep counts accurate
+                        fetchData(page)
+                      }
                     }}
                   />
                 );
               })}
+              <div className="flex gap-2">
+                <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
+                <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full py-10 p-4">

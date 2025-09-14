@@ -92,3 +92,13 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* DayPicker (ShadCN Calendar) tweaks */
+@layer components {
+  /* Hide Month:/Year: visible labels next to dropdowns */
+  .rdp-caption_dropdowns label { @apply sr-only; }
+  /* Ensure DayPicker's vhidden utility remains visually hidden */
+  .rdp-vhidden { @apply sr-only; }
+}
+
+/* removed react-datepicker theming */

@@ -35,6 +35,7 @@ export default function LegacyImportWizard() {
   const [lastKnownSeed, setLastKnownSeed] = useState<{ lat: number; lng: number } | undefined>(undefined)
   const [isUploading, setIsUploading] = useState(false)
   const { toast } = useToast()
+  const [existingDatePairs, setExistingDatePairs] = useState<Set<string>>(new Set())
 
   const current = candidates[index]
 
@@ -69,6 +70,22 @@ export default function LegacyImportWizard() {
     if (!file) return
     setIsUploading(true)
     try {
+      if (existingDatePairs.size === 0) {
+        try {
+          const hist = await fetch('/api/history')
+          if (hist.ok) {
+            const json = await hist.json()
+            const pairs = new Set<string>()
+            const entries = json?.data || []
+            entries.forEach((j: any) => {
+              const dep = String(j.departureDate || '')
+              const arr = String(j.arrivalDate || '')
+              if (dep && arr) pairs.add(`${dep}|${arr}`)
+            })
+            setExistingDatePairs(pairs)
+          }
+        } catch {}
+      }
       const form = new FormData()
       form.append('file', file)
       form.append('offset', String(nextOffset))
@@ -135,6 +152,11 @@ export default function LegacyImportWizard() {
 
   const skip = () => setIndex(i => Math.min(i + 1, candidates.length))
 
+  const isDuplicateByDate = (dep?: string, arr?: string): boolean => {
+    if (!dep || !arr) return false
+    return existingDatePairs.has(`${dep}|${arr}`)
+  }
+
   // Refinement handlers
   const updateCurrent = (updates: Partial<ImportCandidate>) => {
     setCandidates(prev => prev.map((c, i) => i === index ? { ...c, ...updates } : c))
@@ -156,6 +178,15 @@ export default function LegacyImportWizard() {
             <div className="text-sm text-muted-foreground">
               Reviewing {offset + index + 1} of {total ?? candidates.length}
             </div>
+
+            {isDuplicateByDate(current?.departureDate, current?.arrivalDate) && (
+              <div className="p-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200">
+                <div className="text-sm font-medium">Potential duplicate</div>
+                <div className="text-xs">
+                  A journey with the same start and end dates already exists in your history: {formatDisplayDate(current.departureDate)} — {formatDisplayDate(current.arrivalDate)}. You may want to skip this entry.
+                </div>
+              </div>
+            )}
 
             {/* Map Preview */}
             <div className="bg-muted/30 rounded-md border border-border/50 p-3">
