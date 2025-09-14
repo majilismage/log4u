@@ -18,6 +18,9 @@ interface MapLibreWrapperProps {
   mode?: 'single' | 'journey';
   onJourneySelect?: (from: LocationInfo, to: LocationInfo) => void;
   onJourneyStateChange?: (state: JourneyState) => void;
+  initialCenter?: { lat: number; lng: number; zoom?: number };
+  disableLastLocation?: boolean;
+  forceTileProvider?: 'stadia' | 'carto';
 }
 
 // Dynamic import with no SSR and proper loading state

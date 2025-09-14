@@ -37,6 +37,7 @@ export interface GeocodeSearchRequest {
   query: string;
   limit?: number;
   countrycodes?: string; // ISO 3166-1 alpha2 codes, comma-separated
+  allowNonCity?: boolean;
 }
 
 export interface GeocodeSearchResponse {

@@ -52,9 +52,12 @@ interface MapLibreMapProps {
   mode?: 'single' | 'journey';
   onJourneySelect?: (from: LocationInfo, to: LocationInfo) => void;
   onJourneyStateChange?: (state: JourneyState) => void;
+  initialCenter?: { lat: number; lng: number; zoom?: number };
+  disableLastLocation?: boolean;
+  forceTileProvider?: 'stadia' | 'carto';
 }
 
-const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJourneyStateChange }: MapLibreMapProps) => {
+const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJourneyStateChange, initialCenter, disableLastLocation, forceTileProvider }: MapLibreMapProps) => {
   const mapRef = useRef<MapRef>(null);
   const [locationInfo, setLocationInfo] = useState<LocationInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,11 +65,13 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
   const [isLoadingLastLocation, setIsLoadingLastLocation] = useState(true);
   const [currentMousePos, setCurrentMousePos] = useState<[number, number] | null>(null);
   const [mapStyle, setMapStyle] = useState<'street' | 'satellite' | 'hybrid'>('street');
-  const [currentTileProvider, setCurrentTileProvider] = useState(TILE_PROVIDERS.stadia);
+  const [currentTileProvider, setCurrentTileProvider] = useState(
+    forceTileProvider === 'carto' ? TILE_PROVIDERS.cartoFallback : TILE_PROVIDERS.stadia
+  );
   const [viewState, setViewState] = useState({
-    longitude: 0,
-    latitude: 20,
-    zoom: 2
+    longitude: initialCenter?.lng ?? 0,
+    latitude: initialCenter?.lat ?? 20,
+    zoom: initialCenter?.zoom ?? 2
   });
   
   // Performance monitoring state
@@ -93,6 +98,11 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
   useEffect(() => {
     const initializeTileProvider = async () => {
       try {
+        if (forceTileProvider === 'carto') {
+          setCurrentTileProvider(TILE_PROVIDERS.cartoFallback);
+          console.log('Initialized with forced tile provider: Carto');
+          return;
+        }
         const provider = await selectTileProvider();
         setCurrentTileProvider(provider);
         console.log('Initialized with tile provider:', provider.name);
@@ -101,7 +111,7 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
       }
     };
     initializeTileProvider();
-  }, []);
+  }, [forceTileProvider]);
 
   // Memoized map style configurations based on current tile provider
   const mapStyleConfigs = useMemo(() => ({
@@ -187,8 +197,10 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
       }
     };
 
-    fetchLastLocation();
-  }, [unitPreferences.mapZoomDistance, preloadTilesForLocation]);
+    if (!disableLastLocation && !initialCenter) {
+      fetchLastLocation();
+    }
+  }, [unitPreferences.mapZoomDistance, preloadTilesForLocation, disableLastLocation, initialCenter]);
 
   // Update map view when lastLocation becomes available (with smooth transition)
   useEffect(() => {
@@ -222,6 +234,19 @@ const MapLibreMap = ({ onLocationSelect, mode = 'single', onJourneySelect, onJou
       });
     }
   }, [lastLocation, isLoadingLastLocation, unitPreferences.mapZoomDistance]);
+
+  // If initialCenter becomes available after mount, move the map there
+  useEffect(() => {
+    if (initialCenter && mapRef.current) {
+      const zoom = typeof initialCenter.zoom === 'number' ? initialCenter.zoom : 12;
+      mapRef.current.flyTo({
+        center: [initialCenter.lng, initialCenter.lat],
+        zoom,
+        duration: 0,
+        essential: true
+      });
+    }
+  }, [initialCenter]);
 
   // Update parent with journey state changes
   useEffect(() => {

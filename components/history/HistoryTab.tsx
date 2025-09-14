@@ -152,6 +152,9 @@ export function HistoryTab() {
                       console.error('Error updating journey:', error)
                       setError(error) // Use existing error state
                     }}
+                    onDelete={(journeyId) => {
+                      setJourneys(prev => prev.filter(j => j.id !== journeyId))
+                    }}
                   />
                 );
               })}

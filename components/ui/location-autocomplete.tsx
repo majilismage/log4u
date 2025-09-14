@@ -6,6 +6,7 @@ import { MapPin, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import MapLibreWrapper, { type JourneyState } from '@/components/maps/MapLibreWrapper';
 import type { LocationSuggestion } from '@/types/location';
+import { toIso2 } from '@/lib/country-codes';
 
 interface LocationInfo {
   city: string;
@@ -45,6 +46,9 @@ interface LocationAutocompleteProps {
     onLatChange: (value: string) => void;
     onLngChange: (value: string) => void;
   };
+  // Import-only behaviors
+  centerOnCurrentValue?: boolean;
+  singleSelectOnly?: boolean;
 }
 
 export function LocationAutocomplete({
@@ -64,13 +68,16 @@ export function LocationAutocomplete({
   showMapButton = false,
   mapButtonText = "Map View",
   enableJourneyMode = false,
-  siblingProps
+  siblingProps,
+  centerOnCurrentValue = false,
+  singleSelectOnly = false
 }: LocationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [initialCenter, setInitialCenter] = useState<{lat:number; lng:number; zoom?: number} | undefined>(undefined);
   const [journeyState, setJourneyState] = useState<JourneyState>({
     step: 'from',
     fromLocation: null,
@@ -99,6 +106,41 @@ export function LocationAutocomplete({
     setIsMapModalOpen(false);
     cleanupMapDialog();
   };
+
+  // Compute initial center on open (import flow)
+  const prepareInitialCenter = useCallback(async () => {
+    if (!centerOnCurrentValue) return;
+    // If explicit coords present, use them
+    const lat = parseFloat(latValue);
+    const lng = parseFloat(lngValue);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      setInitialCenter({ lat, lng, zoom: 12 });
+      return;
+    }
+    // Else geocode current city + country
+    let qCity = (cityValue || '').trim();
+    // Strip trailing country annotations like " - USA"
+    if (qCity.includes(' - ')) {
+      qCity = qCity.split(' - ')[0].trim();
+    }
+    if (qCity.length < 2) return;
+    const iso = toIso2(countryValue || '');
+    try {
+      const base = `/api/geocode-search?limit=1&allowNonCity=true${iso ? `&countrycodes=${encodeURIComponent(iso)}` : ''}`;
+      const resp = await fetch(`${base}&q=${encodeURIComponent(qCity)}`);
+      const data = await resp.json();
+      let s = data?.suggestions?.[0];
+      if (!s && qCity.includes(',')) {
+        const qPrimary = qCity.split(',')[0].trim();
+        if (qPrimary.length >= 2) {
+          const resp2 = await fetch(`${base}&q=${encodeURIComponent(qPrimary)}`);
+          const data2 = await resp2.json();
+          s = data2?.suggestions?.[0];
+        }
+      }
+      if (s) setInitialCenter({ lat: s.lat, lng: s.lng, zoom: 12 });
+    } catch {}
+  }, [centerOnCurrentValue, cityValue, countryValue, latValue, lngValue]);
 
   // Debounced search function
   const searchLocations = useCallback(async (query: string) => {
@@ -270,6 +312,8 @@ export function LocationAutocomplete({
               handleDialogClose();
             } else {
               setIsMapModalOpen(open);
+              // compute center for import flow
+              prepareInitialCenter();
             }
           }}>
             <DialogTrigger asChild>
@@ -301,7 +345,7 @@ export function LocationAutocomplete({
               </DialogHeader>
               <div className="flex-1 p-6 pt-2">
                 {/* Starting point display */}
-                {enableJourneyMode && journeyState.fromLocation && (
+                {enableJourneyMode && !singleSelectOnly && journeyState.fromLocation && (
                   <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <p className="text-xs text-green-700 dark:text-green-300 font-medium">
                       Starting point: {journeyState.fromLocation.city}, {journeyState.fromLocation.country}, {journeyState.fromLocation.coordinates.lat.toFixed(4)}, {journeyState.fromLocation.coordinates.lng.toFixed(4)}
@@ -310,10 +354,13 @@ export function LocationAutocomplete({
                 )}
                 <div className="w-full h-[calc(90vh-120px)]">
                   <MapLibreWrapper 
-                    mode={enableJourneyMode ? "journey" : "single"}
-                    onLocationSelect={enableJourneyMode ? undefined : handleLocationSelect}
-                    onJourneySelect={enableJourneyMode ? handleJourneySelect : undefined}
-                    onJourneyStateChange={enableJourneyMode ? setJourneyState : undefined}
+                    mode={singleSelectOnly ? 'single' : (enableJourneyMode ? 'journey' : 'single')}
+                    onLocationSelect={singleSelectOnly || !enableJourneyMode ? handleLocationSelect : undefined}
+                    onJourneySelect={!singleSelectOnly && enableJourneyMode ? handleJourneySelect : undefined}
+                    onJourneyStateChange={!singleSelectOnly && enableJourneyMode ? setJourneyState : undefined}
+                    initialCenter={initialCenter}
+                    disableLastLocation={centerOnCurrentValue || !!initialCenter}
+                    forceTileProvider="carto"
                   />
                 </div>
               </div>

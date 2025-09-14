@@ -93,14 +93,14 @@ export async function selectTileProvider(options: {
   timeout?: number
 } = {}): Promise<TileProviderConfig> {
   const { maxRetries = 3, timeout = 5000 } = options
-  
+
   // Check cache
   if (cachedProvider && Date.now() - cacheTimestamp < CACHE_DURATION) {
     return cachedProvider
   }
-  
+
   const providers = [TILE_PROVIDERS.stadia, TILE_PROVIDERS.cartoFallback]
-  
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     for (const provider of providers) {
       try {
@@ -116,13 +116,13 @@ export async function selectTileProvider(options: {
         console.error(`Tile provider ${provider.name} failed (attempt ${attempt + 1}):`, error)
       }
     }
-    
+
     // Exponential backoff before retry
     if (attempt < maxRetries - 1) {
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
     }
   }
-  
+
   // Fallback to Stadia even if validation failed
   console.warn('All tile provider validations failed, using default')
   return TILE_PROVIDERS.stadia

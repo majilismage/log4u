@@ -120,17 +120,24 @@ class NominatimClient {
   /**
    * Convert Nominatim result to our LocationSuggestion format
    */
-  private convertToLocationSuggestion(result: NominatimSearchResult): LocationSuggestion | null {
-    const city = this.extractCityName(result.address);
+  private convertToLocationSuggestion(result: NominatimSearchResult, allowNonCity?: boolean): LocationSuggestion | null {
+    let city = this.extractCityName(result.address);
     const country = this.extractCountryName(result.address);
     
-    // Skip if we can't extract city or country
+    if (allowNonCity) {
+      // If not a city, try to derive a label from display_name
+      if (!city && result.display_name) {
+        city = result.display_name.split(',')[0]?.trim() || '';
+      }
+    }
+    
+    // Skip if we can't extract names
     if (!city || !country) {
       return null;
     }
 
-    // Prefer city-level results over address-level results
-    if (!this.isCityLevelResult(result)) {
+    // Prefer city-level results; if not allowed, return null for non-city
+    if (!allowNonCity && !this.isCityLevelResult(result)) {
       return null;
     }
 
@@ -149,7 +156,7 @@ class NominatimClient {
    * Optimized search with intelligent strategy selection
    */
   async search(request: GeocodeSearchRequest): Promise<LocationSuggestion[]> {
-    const { query, limit = 10, countrycodes } = request;
+    const { query, limit = 10, countrycodes, allowNonCity } = request;
     
     // Check cache first - most performance critical path
     const cached = geocodeCache.get(query, countrycodes);
@@ -175,11 +182,11 @@ class NominatimClient {
         }
         
         // If fuzzy didn't yield enough, combine with exact search
-        const exactResults = await this.performSearch(query, limit, countrycodes);
+        const exactResults = await this.performSearch(query, limit, countrycodes, allowNonCity);
         results = this.combineAndDeduplicateResults(exactResults, fuzzyResults, limit);
       } else {
         // Perform exact search
-        const exactResults = await this.performSearch(query, limit, countrycodes);
+        const exactResults = await this.performSearch(query, limit, countrycodes, allowNonCity);
         
         // Only do additional fuzzy search if exact search was insufficient
         if (exactResults.length < Math.min(3, limit) && targetCities.length > 0) {
@@ -256,7 +263,7 @@ class NominatimClient {
   /**
    * Optimized exact search with minimal logging
    */
-  private async performSearch(query: string, limit: number, countrycodes?: string): Promise<LocationSuggestion[]> {
+  private async performSearch(query: string, limit: number, countrycodes?: string, allowNonCity?: boolean): Promise<LocationSuggestion[]> {
     // Build query parameters
     const params = new URLSearchParams({
       q: query,
@@ -272,8 +279,10 @@ class NominatimClient {
       params.append('countrycodes', countrycodes);
     }
 
-    // Focus on city-level results
-    params.append('featureType', 'city');
+    // Focus on city-level results unless non-city is allowed
+    if (!allowNonCity) {
+      params.append('featureType', 'city');
+    }
 
     const url = `${this.baseUrl}/search?${params.toString()}`;
     
@@ -296,7 +305,7 @@ class NominatimClient {
 
     // Streamlined conversion and filtering
     return data
-      .map(result => this.convertToLocationSuggestion(result))
+      .map(result => this.convertToLocationSuggestion(result, allowNonCity))
       .filter((suggestion): suggestion is LocationSuggestion => suggestion !== null)
       .sort((a, b) => b.importance - a.importance);
   }

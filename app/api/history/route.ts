@@ -33,6 +33,30 @@ export async function GET() {
     }
     
     // Transform rows into a plain array of objects
+    const excelSerialToIso = (val: any): string | undefined => {
+      if (val === undefined || val === null) return undefined
+      // If already looks like an ISO date string, return as-is
+      const s = String(val)
+      // Basic YYYY-MM-DD check
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+      // Try to parse as date string
+      const d1 = new Date(s)
+      if (!isNaN(d1.getTime())) {
+        return d1.toISOString().slice(0, 10)
+      }
+      // Numeric-like: possible Excel serial date
+      if (/^\d+(\.\d+)?$/.test(s)) {
+        const num = Number(s)
+        // Heuristic: treat values in reasonable Excel serial range
+        if (num > 20000 && num < 60000) {
+          const ms = Math.round((num - 25569) * 86400 * 1000)
+          const d = new Date(ms)
+          if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+        }
+      }
+      return undefined
+    }
+
     const data = rows.map(row => {
       const journeyObject: { [key: string]: any } = {};
       columnHeaders.forEach((header, index) => {
@@ -43,6 +67,11 @@ export async function GET() {
             journeyObject[header] = row[index] || undefined;
         }
       });
+      // Normalize date fields to ISO (yyyy-MM-dd) for consistent display
+      const dep = excelSerialToIso(journeyObject['departureDate'])
+      const arr = excelSerialToIso(journeyObject['arrivalDate'])
+      if (dep) journeyObject['departureDate'] = dep
+      if (arr) journeyObject['arrivalDate'] = arr
       return journeyObject;
     }).sort((a, b) => new Date(b.departureDate).getTime() - new Date(a.departureDate).getTime()); // Sort by most recent start
 

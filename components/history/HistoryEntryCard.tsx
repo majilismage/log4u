@@ -10,6 +10,8 @@ import DropZone from '@/components/ui/drop-zone'
 import { useEditableJourney } from '@/hooks/useEditableJourney'
 import { Button } from '@/components/ui/button'
 import { Edit2, Save, X, Loader2, Trash2, Plus, Upload } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useToast } from '@/hooks/use-toast'
 import { format, parseISO, isValid } from 'date-fns'
 import { useEnglishPlaceName } from '@/hooks/useEnglishPlaceName'
 
@@ -145,18 +147,23 @@ interface HistoryEntryCardProps {
   isEditable?: boolean
   onUpdate?: (updates: Partial<JourneyEntryWithMedia>) => void
   onError?: (error: string) => void
+  onDelete?: (journeyId: string) => void
 }
 
 const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({ 
   journey, 
   isEditable = false,
   onUpdate,
-  onError
+  onError,
+  onDelete
 }) => {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string>('')
   const [localMedia, setLocalMedia] = useState(journey.media || [])
   const [hasMediaChanges, setHasMediaChanges] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const { toast } = useToast()
 
   const {
     isEditing,
@@ -194,6 +201,31 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
       return dateString
     } catch {
       return dateString
+    }
+  }
+
+  const handleDeleteJourney = async () => {
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDelete = async () => {
+    if (isDeleting) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/journey/${journey.id}`, { method: 'DELETE' })
+      if (!res.ok && res.status !== 404) {
+        const txt = await res.text().catch(() => '')
+        throw new Error(txt || 'Failed to delete journey')
+      }
+      // Treat 404 as success (already deleted)
+      onDelete?.(journey.id)
+      setShowDeleteDialog(false)
+      toast({ title: 'Journey deleted', description: 'The journey has been removed from history.' })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to delete journey'
+      toast({ title: 'Delete failed', description: message, variant: 'destructive' })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -357,6 +389,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
   }
 
   return (
+    <>
     <div className="bg-white dark:bg-neutral-800 shadow-lg dark:shadow-neutral-900/50 rounded-xl overflow-hidden border border-slate-200 dark:border-neutral-700 transition-shadow duration-300 ease-in-out">
       {/* Edit controls */}
       {isEditable && (
@@ -412,6 +445,15 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
               </Button>
               </>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleDeleteJourney}
+              aria-label="Delete journey"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
           </div>
         </div>
       )}
@@ -517,6 +559,33 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
         )}
       </div>
     </div>
+
+    {/* Delete confirmation modal */}
+    <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete journey?</DialogTitle>
+          <DialogDescription>
+            This will permanently remove this journey and its metadata from your history. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowDeleteDialog(false)} disabled={isDeleting}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={confirmDelete} aria-label="Confirm delete journey" disabled={isDeleting}>
+            {isDeleting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting...
+              </>
+            ) : (
+              'Delete'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 

@@ -24,13 +24,15 @@ export async function GET(request: NextRequest) {
   try {
     const limit = searchParams.get('limit');
     const countrycodes = searchParams.get('countrycodes');
+    const allowNonCity = searchParams.get('allowNonCity') === 'true';
     const debug = searchParams.get('debug') === 'true';
 
     // Build search request with minimal overhead
     const searchRequest: GeocodeSearchRequest = {
       query: query.trim(),
       limit: limit ? Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50) : 10,
-      countrycodes: countrycodes || undefined
+      countrycodes: countrycodes || undefined,
+      allowNonCity
     };
 
     // Only log in development or debug mode
