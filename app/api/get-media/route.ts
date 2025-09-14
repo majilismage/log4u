@@ -119,4 +119,30 @@ export async function GET() {
       { status: 500 }
     );
   }
-} 
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json().catch(() => null) as { mediaId?: string } | null
+    const mediaId = body?.mediaId
+    if (!mediaId) {
+      return NextResponse.json({ error: 'mediaId is required' }, { status: 400 })
+    }
+
+    const { auth } = await getAuthenticatedClient()
+    const drive = google.drive({ version: 'v3', auth })
+
+    await drive.files.delete({ fileId: mediaId })
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    const status = (error?.code as number) || (error?.response?.status as number) || 500
+    if (status === 404) {
+      // Treat missing file as already deleted
+      return NextResponse.json({ success: true, note: 'Already deleted' })
+    }
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('Error deleting media', { error: message, status })
+    return NextResponse.json({ error: 'Failed to delete media', details: message }, { status: 500 })
+  }
+}

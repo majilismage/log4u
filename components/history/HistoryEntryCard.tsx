@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast'
 import { format, parseISO, isValid } from 'date-fns'
 import { useEnglishPlaceName } from '@/hooks/useEnglishPlaceName'
+import { Label } from '@/components/ui/label'
+import { LocationAutocomplete } from '@/components/ui/location-autocomplete'
 
 const PlayIcon = () => (
   <svg className="w-8 h-8 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -30,6 +32,7 @@ interface EditableMediaGridProps {
   onAddMedia?: () => void
   onDropFiles?: (files: File[]) => void
   onDropError?: (error: string) => void
+  deletingMediaId?: string
 }
 
 const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({ 
@@ -40,8 +43,10 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
   onDeleteMedia,
   onAddMedia,
   onDropFiles,
-  onDropError
+  onDropError,
+  deletingMediaId
 }) => {
+  const [confirmMediaId, setConfirmMediaId] = useState<string | null>(null)
   const content = (
     <div className="p-4 border-t border-slate-200 dark:border-neutral-700">
       <div className="flex justify-between items-center mb-3">
@@ -96,9 +101,14 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
                 className="aspect-square"
                 isVideo={item.mimeType.startsWith('video/')}
               />
+              {deletingMediaId === item.id && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-white" />
+                </div>
+              )}
               {isEditing && (
                 <button
-                  onClick={() => onDeleteMedia?.(item.id)}
+                  onClick={() => setConfirmMediaId(item.id)}
                   className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label={`Delete ${item.name}`}
                 >
@@ -121,9 +131,26 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
     </div>
   )
 
+  // Confirm modal
+  const confirmDialog = (
+    <Dialog open={!!confirmMediaId} onOpenChange={(open) => !open && setConfirmMediaId(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete media?</DialogTitle>
+          <DialogDescription>This will permanently delete this media from Google Drive.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmMediaId(null)}>Cancel</Button>
+          <Button variant="destructive" onClick={() => { if (confirmMediaId) { onDeleteMedia?.(confirmMediaId); setConfirmMediaId(null); } }}>Delete</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
   // Wrap in DropZone only when editing
   if (isEditing && onDropFiles) {
     return (
+      <>
       <DropZone
         onDrop={onDropFiles}
         onError={onDropError}
@@ -136,10 +163,16 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
       >
         {content}
       </DropZone>
+      {confirmDialog}
+      </>
     )
   }
-
-  return content
+  return (
+    <>
+      {content}
+      {confirmDialog}
+    </>
+  )
 }
 
 interface HistoryEntryCardProps {
@@ -161,6 +194,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
   const [uploadProgress, setUploadProgress] = useState<string>('')
   const [localMedia, setLocalMedia] = useState(journey.media || [])
   const [hasMediaChanges, setHasMediaChanges] = useState(false)
+  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const { toast } = useToast()
@@ -240,6 +274,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
 
   const handleDeleteMedia = async (mediaId: string) => {
     try {
+      setDeletingMediaId(mediaId)
       const response = await fetch('/api/get-media', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -254,8 +289,11 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
       const updatedMedia = localMedia.filter(m => m.id !== mediaId)
       setLocalMedia(updatedMedia)
       onUpdate?.({ media: updatedMedia })
+      toast({ title: 'Media deleted', description: 'The item was removed successfully.' })
     } catch (error) {
       onError?.(error instanceof Error ? error.message : 'Failed to delete media')
+    } finally {
+      setDeletingMediaId(null)
     }
   }
 
@@ -472,7 +510,46 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
           {/* Metadata Section */}
           <div className="w-full md:w-[60%] md:flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-neutral-700">
             {isEditing ? (
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-5">
+                {/* From / To editors with map view */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">From</Label>
+                    <LocationAutocomplete
+                      label="From"
+                      cityValue={String(getValue('fromTown') ?? '')}
+                      countryValue={String(getValue('fromCountry') ?? '')}
+                      latValue={getValue('fromLatitude') !== undefined ? String(getValue('fromLatitude')) : ''}
+                      lngValue={getValue('fromLongitude') !== undefined ? String(getValue('fromLongitude')) : ''}
+                      onCityChange={(v) => updateField('fromTown', v)}
+                      onCountryChange={(v) => updateField('fromCountry', v)}
+                      onLatChange={(v) => updateField('fromLatitude', v ? parseFloat(v) : undefined)}
+                      onLngChange={(v) => updateField('fromLongitude', v ? parseFloat(v) : undefined)}
+                      showMapButton
+                      centerOnCurrentValue
+                      singleSelectOnly
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">To</Label>
+                    <LocationAutocomplete
+                      label="To"
+                      cityValue={String(getValue('toTown') ?? '')}
+                      countryValue={String(getValue('toCountry') ?? '')}
+                      latValue={getValue('toLatitude') !== undefined ? String(getValue('toLatitude')) : ''}
+                      lngValue={getValue('toLongitude') !== undefined ? String(getValue('toLongitude')) : ''}
+                      onCityChange={(v) => updateField('toTown', v)}
+                      onCountryChange={(v) => updateField('toCountry', v)}
+                      onLatChange={(v) => updateField('toLatitude', v ? parseFloat(v) : undefined)}
+                      onLngChange={(v) => updateField('toLongitude', v ? parseFloat(v) : undefined)}
+                      showMapButton
+                      centerOnCurrentValue
+                      singleSelectOnly
+                    />
+                  </div>
+                </div>
+
+                {/* Stats editors */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Distance</label>
@@ -555,6 +632,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
             onAddMedia={handleAddMedia}
             onDropFiles={handleDropFiles}
             onDropError={onError}
+            deletingMediaId={deletingMediaId || undefined}
           />
         )}
       </div>

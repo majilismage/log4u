@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Label } from '@/components/ui/label'
 import { LocationAutocomplete } from '@/components/ui/location-autocomplete'
@@ -34,6 +35,7 @@ export default function LegacyImportWizard() {
   const [total, setTotal] = useState<number | null>(null)
   const [lastKnownSeed, setLastKnownSeed] = useState<{ lat: number; lng: number } | undefined>(undefined)
   const [isUploading, setIsUploading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const { toast } = useToast()
   const [existingDatePairs, setExistingDatePairs] = useState<Set<string>>(new Set())
 
@@ -116,6 +118,7 @@ export default function LegacyImportWizard() {
   const approve = async () => {
     if (!current) return
     try {
+      setIsSaving(true)
       const payload = {
         departureDate: current.departureDate,
         arrivalDate: current.arrivalDate,
@@ -147,6 +150,8 @@ export default function LegacyImportWizard() {
     } catch (e: any) {
       const message = e?.message || 'Could not save entry'
       toast({ title: 'Save failed', description: message, variant: 'destructive' })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -290,8 +295,16 @@ export default function LegacyImportWizard() {
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={skip}>Skip</Button>
-              <Button onClick={approve} disabled={!current.fromCoordinates || !current.toCoordinates}>Approve & Save</Button>
+              <Button variant="outline" onClick={skip} disabled={isSaving}>Skip</Button>
+              <Button onClick={approve} disabled={isSaving || !current.fromCoordinates || !current.toCoordinates}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  'Approve & Save'
+                )}
+              </Button>
             </div>
           </div>
         )}
