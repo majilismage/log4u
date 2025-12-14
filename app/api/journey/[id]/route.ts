@@ -4,7 +4,7 @@ import { google } from 'googleapis'
 import { z } from 'zod'
 
 // Validation schema for journey updates
-const updateSchema = z.object({
+const journeyUpdateSchema = z.object({
   departureDate: z.string().optional(),
   arrivalDate: z.string().optional(),
   fromTown: z.string().optional(),
@@ -19,10 +19,25 @@ const updateSchema = z.object({
   averageSpeed: z.string().refine(val => !val || Number(val) >= 0, 'Speed must be non-negative').optional(),
   maxSpeed: z.string().refine(val => !val || Number(val) >= 0, 'Speed must be non-negative').optional(),
   notes: z.string().optional()
-}).strict() // Reject unknown fields like journeyId
+})
+
+// Validation schema for event updates
+const eventUpdateSchema = z.object({
+  date: z.string().optional(),
+  title: z.string().optional(),
+  town: z.string().optional(),
+  country: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  notes: z.string().optional()
+})
+
+// Combined schema that accepts either journey or event fields
+const updateSchema = journeyUpdateSchema.merge(eventUpdateSchema).partial()
 
 // Column mapping for Google Sheets
 const COLUMN_MAP: Record<string, string> = {
+  // Journey fields
   departureDate: 'B',
   arrivalDate: 'C',
   fromTown: 'D',
@@ -36,7 +51,15 @@ const COLUMN_MAP: Record<string, string> = {
   distance: 'L',
   averageSpeed: 'M',
   maxSpeed: 'N',
-  notes: 'O'
+  notes: 'O',
+  entryType: 'S',
+  // Event fields (mapped to journey columns where shared)
+  date: 'B',           // Events use departureDate column for date
+  title: 'T',
+  town: 'D',           // Events use fromTown column for single location
+  country: 'E',        // Events use fromCountry column
+  latitude: 'F',       // Events use fromLat column
+  longitude: 'G',      // Events use fromLng column
 }
 
 export async function PUT(
@@ -69,10 +92,10 @@ export async function PUT(
 
     const sheets = google.sheets({ version: 'v4', auth })
 
-    // Find the row with the journey ID
+    // Find the row with the entry ID
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: googleSheetsId,
-      range: 'A2:R' // Skip header row
+      range: 'A2:T' // Skip header row, includes entryType and title columns
     })
 
     const rows = response.data.values || []
@@ -140,10 +163,10 @@ export async function DELETE(
 
     const sheets = google.sheets({ version: 'v4', auth })
 
-    // Find the row with the journey ID
+    // Find the row with the entry ID
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: googleSheetsId,
-      range: 'A2:R'
+      range: 'A2:T'
     })
 
     const rows = response.data.values || []

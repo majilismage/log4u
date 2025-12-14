@@ -1,4 +1,8 @@
+// Entry type discriminator
+export type EntryType = 'journey' | 'event';
+
 export interface JourneyEntry {
+  entryType: 'journey';
   id: string;
   fromTown: string;
   fromCountry: string;
@@ -15,18 +19,23 @@ export interface JourneyEntry {
   fromLongitude?: number;
   toLatitude?: number;
   toLongitude?: number;
-  // Optional fields for future phases, not used in Phase 1 UI directly by these components yet
-  // startLat?: number;
-  // startLng?: number;
-  // endLat?: number;
-  // endLng?: number;
-  // mediaItems?: Array<{ 
-  //   id: string; 
-  //   thumbnailUrl: string; 
-  //   webViewLink: string; 
-  //   mimeType: string; 
-  // }>;
 }
+
+export interface EventEntry {
+  entryType: 'event';
+  id: string;
+  date: string;          // Single date for the event
+  title: string;         // e.g., "Engine Service", "Oil Change"
+  notes?: string;
+  // Optional single location
+  town?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+// Discriminated union of all entry types
+export type Entry = JourneyEntry | EventEntry;
 
 export interface MediaItem {
   id: string;
@@ -40,4 +49,20 @@ export interface MediaItem {
 
 export interface JourneyEntryWithMedia extends JourneyEntry {
   media: MediaItem[];
+}
+
+export interface EventEntryWithMedia extends EventEntry {
+  media: MediaItem[];
+}
+
+// Union type for any entry with media
+export type EntryWithMedia = JourneyEntryWithMedia | EventEntryWithMedia;
+
+// Type guard functions
+export function isJourneyEntry(entry: Entry): entry is JourneyEntry {
+  return entry.entryType === 'journey';
+}
+
+export function isEventEntry(entry: Entry): entry is EventEntry {
+  return entry.entryType === 'event';
 } 

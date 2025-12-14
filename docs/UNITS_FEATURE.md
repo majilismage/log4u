@@ -8,6 +8,7 @@ The units preferences feature allows users to customize how distances and speeds
 
 - **Speed**: Knots, Miles per hour (mph), or Kilometers per hour (km/h)
 - **Distance**: Miles, Nautical miles, or Kilometers
+- **Map Zoom Distance**: Custom zoom radius when viewing journeys (5-500 units)
 
 ## Features
 
@@ -18,6 +19,7 @@ The units preferences feature allows users to customize how distances and speeds
 - **Retroactive Display**: Historical data is converted and displayed in current preferred units
 - **Seamless UI Integration**: Unit labels are displayed throughout the interface
 - **Persistent Settings**: Preferences are saved to the database and preserved across sessions
+- **Map Zoom Control**: Customize how far the map zooms out when viewing journeys (5-500 units in your preferred distance unit)
 
 ### 🎯 User Experience Improvements
 
@@ -35,6 +37,7 @@ New columns added to `user_google_config` table:
 ```sql
 "speedUnit" VARCHAR(10) DEFAULT 'knots'
 "distanceUnit" VARCHAR(20) DEFAULT 'nautical_miles'
+"mapZoomDistance" INTEGER DEFAULT 100 CHECK ("mapZoomDistance" >= 5 AND "mapZoomDistance" <= 500)
 ```
 
 ### API Endpoints
@@ -96,6 +99,7 @@ No new environment variables are required.
 2. **Changing Units**
    - Select preferred speed unit (Knots, MPH, or KM/H)
    - Select preferred distance unit (Miles, Nautical Miles, or Kilometers)
+   - Adjust map zoom distance (5-500 units) to control how far the map zooms out when viewing journeys
    - Click "Save Changes"
 
 3. **Using the App**
@@ -117,6 +121,7 @@ function MyComponent() {
   // Current preferences
   console.log(unitPreferences.speedUnit); // 'knots' | 'mph' | 'kmh'
   console.log(unitPreferences.distanceUnit); // 'miles' | 'nautical_miles' | 'kilometers'
+  console.log(unitPreferences.mapZoomDistance); // 5-500 (in user's distance unit)
   
   // Formatted labels and symbols
   console.log(unitConfig.speed.label); // "Knots"
@@ -152,10 +157,13 @@ const { updateUnitPreferences } = useUnits();
 await updateUnitPreferences({ speedUnit: 'mph' });
 
 // Update both units
-await updateUnitPreferences({ 
-  speedUnit: 'kmh', 
-  distanceUnit: 'kilometers' 
+await updateUnitPreferences({
+  speedUnit: 'kmh',
+  distanceUnit: 'kilometers'
 });
+
+// Update map zoom distance
+await updateUnitPreferences({ mapZoomDistance: 50 });
 ```
 
 ## Data Flow

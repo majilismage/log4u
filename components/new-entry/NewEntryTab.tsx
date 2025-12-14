@@ -16,9 +16,11 @@ import { useLoading } from "@/lib/LoadingContext"
 import { useToast } from "@/hooks/use-toast"
 import { FilePreview } from "@/components/FilePreview"
 import { LocationAutocomplete } from "@/components/ui/location-autocomplete"
-import type { JourneyEntry } from "@/types/journey"
+import type { JourneyEntry, EntryType } from "@/types/journey"
 import { useUnits } from "@/lib/UnitsContext"
 import { calculateDistance, formatDistance, formatSpeed } from "@/lib/unit-conversions"
+import { EntryTypeToggle } from "@/components/ui/entry-type-toggle"
+import { EventFormFields } from "@/components/new-entry/EventFormFields"
 
 interface TravelEntry {
   id: string
@@ -34,6 +36,10 @@ interface TravelEntry {
 }
 
 export function NewEntryTab() {
+  // Entry type toggle state
+  const [entryType, setEntryType] = useState<EntryType>("journey")
+
+  // Journey-specific state
   const [departureDate, setDepartureDate] = useState<Date>(new Date())
   const [arrivalDate, setArrivalDate] = useState<Date>(new Date())
   const [departureDateOpen, setDepartureDateOpen] = useState(false)
@@ -53,6 +59,17 @@ export function NewEntryTab() {
   const [notes, setNotes] = useState("")
   const [entries, setEntries] = useState<TravelEntry[]>([])
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+
+  // Event-specific state
+  const [eventDate, setEventDate] = useState<Date>(new Date())
+  const [eventTitle, setEventTitle] = useState("")
+  const [eventTown, setEventTown] = useState("")
+  const [eventCountry, setEventCountry] = useState("")
+  const [eventLat, setEventLat] = useState("")
+  const [eventLng, setEventLng] = useState("")
+  const [eventNotes, setEventNotes] = useState("")
+  const [eventFiles, setEventFiles] = useState<File[]>([])
+
   const { setLoading, setProgress } = useLoading()
   const { unitConfig, isLoading: unitsLoading } = useUnits()
   const { toast } = useToast()
@@ -80,6 +97,18 @@ export function NewEntryTab() {
 
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Event file handlers
+  const handleEventFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      setEventFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const removeEventFile = (index: number) => {
+    setEventFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   // Update distance whenever coordinates or units change
@@ -194,22 +223,35 @@ export function NewEntryTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true, 'Saving your travel entry...');
+    const isEvent = entryType === 'event';
+    setLoading(true, isEvent ? 'Saving your event...' : 'Saving your travel entry...');
 
     try {
-      // 1. Save the core journey details to get the official journeyId
-      const entryToSave = {
-        departureDate: format(departureDate, "yyyy-MM-dd"),
-        arrivalDate: format(arrivalDate, "yyyy-MM-dd"),
-        fromTown, fromCountry,
-        fromLat: parseFloat(fromLat), fromLng: parseFloat(fromLng),
-        toTown, toCountry,
-        toLat: parseFloat(toLat), toLng: parseFloat(toLng),
-        distance, avgSpeed, maxSpeed,
-        notes,
-      };
+      // Build the entry payload based on type
+      const entryToSave = isEvent
+        ? {
+            entryType: 'event' as const,
+            date: format(eventDate, "yyyy-MM-dd"),
+            title: eventTitle,
+            town: eventTown || undefined,
+            country: eventCountry || undefined,
+            lat: eventLat ? parseFloat(eventLat) : undefined,
+            lng: eventLng ? parseFloat(eventLng) : undefined,
+            notes: eventNotes || undefined,
+          }
+        : {
+            entryType: 'journey' as const,
+            departureDate: format(departureDate, "yyyy-MM-dd"),
+            arrivalDate: format(arrivalDate, "yyyy-MM-dd"),
+            fromTown, fromCountry,
+            fromLat: parseFloat(fromLat), fromLng: parseFloat(fromLng),
+            toTown, toCountry,
+            toLat: parseFloat(toLat), toLng: parseFloat(toLng),
+            distance, avgSpeed, maxSpeed,
+            notes,
+          };
 
-      console.log('CLIENT: About to save entry to get journey ID', { timestamp: Date.now() });
+      console.log('CLIENT: About to save entry', { entryType, timestamp: Date.now() });
       const saveResponse = await fetch('/api/save-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,61 +259,65 @@ export function NewEntryTab() {
       });
 
       const saveResult = await saveResponse.json();
-      if (!saveResult.success || !saveResult.journeyId) {
-        throw new Error(saveResult.error || 'Failed to save entry and get a journey ID.');
+      if (!saveResult.success || !saveResult.entryId) {
+        throw new Error(saveResult.error || 'Failed to save entry.');
       }
-      
-      const officialJourneyId = saveResult.journeyId;
-      console.log('CLIENT: Successfully saved entry, received official Journey ID:', {
-        officialJourneyId,
-        journeyIdType: typeof officialJourneyId,
-        journeyIdLength: officialJourneyId.length,
-        journeyIdPattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(officialJourneyId) ? 'UUID' :
-          /^J\d+$/.test(officialJourneyId) ? 'J+timestamp' :
-          'other',
+
+      const officialEntryId = saveResult.entryId;
+      console.log('CLIENT: Successfully saved entry, received ID:', {
+        officialEntryId,
+        entryType,
         timestamp: Date.now()
       });
 
-      // 2. If there are files, upload them using the official journeyId
-      if (selectedFiles.length > 0) {
-        setLoading(true, `Uploading ${selectedFiles.length} media file(s)...`);
-        console.log('CLIENT: About to upload files with journey ID:', {
-          journeyIdToUse: officialJourneyId,
-          fileCount: selectedFiles.length,
-          timestamp: Date.now()
-        });
-        // Note: The uploadFiles function is now fire-and-forget in the background
-        // as the main record is already saved. We don't need the folder links back.
-        await uploadFiles(officialJourneyId);
+      // Upload files if any
+      const filesToUpload = isEvent ? eventFiles : selectedFiles;
+      if (filesToUpload.length > 0) {
+        setLoading(true, `Uploading ${filesToUpload.length} media file(s)...`);
+        await uploadFiles(officialEntryId);
       }
 
-      // 3. Show success confirmation toast
-      toast({
-        title: "Journey saved",
-        description: `${fromTown || 'From'} → ${toTown || 'To'} (${format(departureDate, 'PPP')} – ${format(arrivalDate, 'PPP')})`,
-      })
-
-      // 4. Reset form state on successful submission
-      setJourneyId("");
-      setFromTown("");
-      setFromCountry("");
-      setFromLat("");
-      setFromLng("");
-      setToTown("");
-      setToCountry("");
-      setToLat("");
-      setToLng("");
-      setDistance("");
-      setAvgSpeed("");
-      setMaxSpeed("");
-      setNotes("");
-      setSelectedFiles([]);
+      // Show success toast
+      if (isEvent) {
+        toast({
+          title: "Event saved",
+          description: `${eventTitle} (${format(eventDate, 'PPP')})`,
+        });
+        // Reset event form state
+        setEventTitle("");
+        setEventTown("");
+        setEventCountry("");
+        setEventLat("");
+        setEventLng("");
+        setEventNotes("");
+        setEventFiles([]);
+      } else {
+        toast({
+          title: "Journey saved",
+          description: `${fromTown || 'From'} → ${toTown || 'To'} (${format(departureDate, 'PPP')} – ${format(arrivalDate, 'PPP')})`,
+        });
+        // Reset journey form state
+        setJourneyId("");
+        setFromTown("");
+        setFromCountry("");
+        setFromLat("");
+        setFromLng("");
+        setToTown("");
+        setToCountry("");
+        setToLat("");
+        setToLng("");
+        setDistance("");
+        setAvgSpeed("");
+        setMaxSpeed("");
+        setNotes("");
+        setSelectedFiles([]);
+      }
 
     } catch (error) {
       console.error('Error processing entry:', error);
       // Show error toast consistent with app design
       toast({
-        title: "Failed to save journey",
+        title: entryType === 'event' ? "Failed to save event" : "Failed to save journey",
         description: "Please try again.",
         variant: "destructive",
       })
@@ -286,6 +332,34 @@ export function NewEntryTab() {
     <Card>
       <CardContent className="p-4 sm:p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Entry Type Toggle */}
+          <div className="flex items-center justify-between">
+            <EntryTypeToggle value={entryType} onChange={setEntryType} />
+          </div>
+
+          {/* Conditional Form Sections */}
+          {entryType === 'event' ? (
+            <EventFormFields
+              date={eventDate}
+              onDateChange={setEventDate}
+              title={eventTitle}
+              onTitleChange={setEventTitle}
+              town={eventTown}
+              country={eventCountry}
+              lat={eventLat}
+              lng={eventLng}
+              onTownChange={setEventTown}
+              onCountryChange={setEventCountry}
+              onLatChange={setEventLat}
+              onLngChange={setEventLng}
+              notes={eventNotes}
+              onNotesChange={setEventNotes}
+              selectedFiles={eventFiles}
+              onFileSelect={handleEventFileSelect}
+              onRemoveFile={removeEventFile}
+            />
+          ) : (
+          <>
           {/* Journey Dates Section */}
           <div className="bg-muted/30 rounded-lg p-4 sm:p-5 border border-border/50">
             <div className="flex items-center gap-3 mb-4">
@@ -605,11 +679,13 @@ export function NewEntryTab() {
               )}
             </div>
           </div>
+          </>
+          )}
 
           {/* Submit Button */}
           <div className="pt-4">
             <Button type="submit" className="w-full h-12 text-base font-semibold">
-              Save Journey Entry
+              {entryType === 'event' ? 'Save Event' : 'Save Journey Entry'}
             </Button>
           </div>
         </form>

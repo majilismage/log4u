@@ -3,11 +3,14 @@ import { getAuthenticatedClient } from '@/lib/google-api-client';
 import { google } from 'googleapis';
 import { logger } from '@/lib/logger';
 
+import type { EntryType } from '@/types/journey';
+
 // Based on the previous implementation and expected frontend structure
+// Columns A-R (existing) + S (entryType) + T (title)
 const columnHeaders = [
   'journeyId', 'departureDate', 'arrivalDate', 'fromTown', 'fromCountry', 'fromLat', 'fromLng',
   'toTown', 'toCountry', 'toLat', 'toLng', 'distance', 'averageSpeed', 'maxSpeed',
-  'notes', 'imagesLink', 'videosLink', 'timestamp'
+  'notes', 'imagesLink', 'videosLink', 'timestamp', 'entryType', 'title'
 ];
 
 export async function GET(request: Request) {
@@ -15,6 +18,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0)
     const limit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '10', 10) || 10))
+    // Filter by entry type: 'all', 'journey', or 'event'
+    const typeFilter = (url.searchParams.get('type') || 'all') as 'all' | EntryType
     const { auth, googleSheetsId } = await getAuthenticatedClient();
 
     if (!googleSheetsId) {
@@ -26,7 +31,8 @@ export async function GET(request: Request) {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: googleSheetsId,
       // Assuming data is in the first sheet and starts at A2 to skip headers
-      range: 'A2:R', 
+      // Columns A-T (extended for entryType and title)
+      range: 'A2:T', 
     });
 
     const rows = response.data.values;
@@ -61,39 +67,56 @@ export async function GET(request: Request) {
     }
 
     const data = rows.map(row => {
-      const journeyObject: { [key: string]: any } = {};
+      const entryObject: { [key: string]: any } = {};
       columnHeaders.forEach((header, index) => {
         // Handle numeric conversions
-        if (['fromLat', 'fromLng', 'toLat', 'toLng', 'distance', 'averageSpeed', 'maxSpeed'].includes(header)) {
-            journeyObject[header] = row[index] ? parseFloat(row[index]) : undefined;
+        if (['fromLat', 'fromLng', 'toLat', 'toLng', 'distance', 'averageSpeed', 'maxSpeed', 'latitude', 'longitude'].includes(header)) {
+            entryObject[header] = row[index] ? parseFloat(row[index]) : undefined;
         } else {
-            journeyObject[header] = row[index] || undefined;
+            entryObject[header] = row[index] || undefined;
         }
       });
       // Normalize date fields to ISO (yyyy-MM-dd) for consistent display
-      const dep = excelSerialToIso(journeyObject['departureDate'])
-      const arr = excelSerialToIso(journeyObject['arrivalDate'])
-      if (dep) journeyObject['departureDate'] = dep
-      if (arr) journeyObject['arrivalDate'] = arr
-      return journeyObject;
-    }).sort((a, b) => new Date(b.departureDate).getTime() - new Date(a.departureDate).getTime()); // Sort by most recent start
+      const dep = excelSerialToIso(entryObject['departureDate'])
+      const arr = excelSerialToIso(entryObject['arrivalDate'])
+      if (dep) entryObject['departureDate'] = dep
+      if (arr) entryObject['arrivalDate'] = arr
 
-    const totalCount = data.length;
-    const pageData = data.slice(offset, Math.min(offset + limit, totalCount))
+      // Default entryType to 'journey' for backward compatibility with existing data
+      if (!entryObject['entryType']) {
+        entryObject['entryType'] = 'journey';
+      }
 
-    const sheetJourneyIds = data.map(entry => entry.journeyId).filter(id => id);
+      // For events, copy departureDate to 'date' field for convenience
+      if (entryObject['entryType'] === 'event') {
+        entryObject['date'] = entryObject['departureDate'];
+        // Map location fields for events (fromTown/fromCountry -> town/country)
+        entryObject['town'] = entryObject['fromTown'];
+        entryObject['country'] = entryObject['fromCountry'];
+        entryObject['latitude'] = entryObject['fromLat'];
+        entryObject['longitude'] = entryObject['fromLng'];
+      }
+
+      return entryObject;
+    }).sort((a, b) => new Date(b.departureDate).getTime() - new Date(a.departureDate).getTime()); // Sort by most recent date
+
+    // Apply type filter
+    const filteredData = typeFilter === 'all'
+      ? data
+      : data.filter(entry => entry.entryType === typeFilter);
+
+    const totalCount = filteredData.length;
+    const pageData = filteredData.slice(offset, Math.min(offset + limit, totalCount))
+
+    const entryIds = filteredData.map(entry => entry.journeyId).filter(id => id);
     logger.info('HISTORY: Successfully fetched history entries', {
-      recordCount: data.length,
-      sheetJourneyIds: sheetJourneyIds,
-      journeyIdPatterns: sheetJourneyIds.map(id => ({
-        id,
-        pattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? 'UUID' :
-          /^J\d+$/.test(id) ? 'J+timestamp' :
-          'other'
-      }))
+      totalRecords: data.length,
+      filteredRecords: filteredData.length,
+      typeFilter,
+      entryIds: entryIds.slice(0, 10), // Log first 10 IDs only
     });
 
-    logger.info(`Successfully fetched ${pageData.length}/${totalCount} history entries for the user.`, { offset, limit });
+    logger.info(`Successfully fetched ${pageData.length}/${totalCount} history entries for the user.`, { offset, limit, typeFilter });
 
     return NextResponse.json({
       success: true,
@@ -101,6 +124,7 @@ export async function GET(request: Request) {
       totalCount,
       offset,
       limit,
+      typeFilter,
       data: pageData,
     });
 

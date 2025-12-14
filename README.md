@@ -36,6 +36,11 @@ Sign in with Google to securely store your travel data in your own Google Drive 
 - View detailed journey cards with all your information
 - Access your media gallery organized by trip
 
+### 5. **Customize Your Experience**
+- Set your preferred distance and speed units in Settings
+- Import existing travel data from Excel spreadsheets
+- Adjust map zoom preferences to your liking
+
 ## 🔒 Your Data, Your Control
 
 - **Private & Secure**: Your travel data stays in YOUR Google account
@@ -69,6 +74,21 @@ Sign in with Google to securely store your travel data in your own Google Drive 
 - Clean, intuitive design
 - Mobile-friendly experience
 - Dark mode support
+
+**⚙️ Customizable Units**
+- Choose your preferred distance units (Miles, Nautical Miles, Kilometers)
+- Choose your preferred speed units (MPH, Knots, KM/H)
+- Customize map zoom distance (5-500 units)
+
+**📥 Legacy Import**
+- Import existing travel logs from Excel/XLSX files
+- Automatic date format detection and normalization
+- Review and refine entries before saving
+
+**📄 Paginated History**
+- Browse your journey history with easy pagination
+- 10 entries per page for quick navigation
+- Edit or delete entries with confirmation
 
 ## 🚀 Getting Started
 

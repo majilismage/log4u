@@ -94,7 +94,7 @@ export function GalleryTab() {
           allMedia.length > 0 ? (
             <div className="space-y-6">
               <p className="text-lg text-slate-700 dark:text-neutral-300">
-                {allMedia.length} media files found across all journeys.
+                {allMedia.length} media files found across all entries.
               </p>
               <ScrollArea className="h-[calc(100vh-300px)] lg:h-[calc(100vh-250px)] pr-4">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-4">
