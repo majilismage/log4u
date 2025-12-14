@@ -117,8 +117,12 @@ export function NewEntryTab() {
   }, [fromLat, fromLng, toLat, toLng, unitConfig.distance.unit, unitsLoading]);
 
   // Upload files and return the folder links (for images and videos)
-  const uploadFiles = async (journeyId: string): Promise<{ imageFolderUrl?: string; videoFolderUrl?: string }> => {
-    if (selectedFiles.length === 0) return {};
+  const uploadFiles = async (
+    journeyId: string,
+    files: File[],
+    metadata: { town: string; country: string; date: Date }
+  ): Promise<{ imageFolderUrl?: string; videoFolderUrl?: string }> => {
+    if (files.length === 0) return {};
 
     console.log('CLIENT-UPLOAD: Starting file upload process', {
       journeyId,
@@ -127,18 +131,18 @@ export function NewEntryTab() {
       journeyIdPattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(journeyId) ? 'UUID' :
         /^J\d+$/.test(journeyId) ? 'J+timestamp' :
         'other',
-      fileCount: selectedFiles.length,
-      fileTypes: selectedFiles.map(f => f.type),
-      fileSizes: selectedFiles.map(f => f.size),
+      fileCount: files.length,
+      fileTypes: files.map(f => f.type),
+      fileSizes: files.map(f => f.size),
       timestamp: Date.now()
     });
 
     let imageFolderUrl: string | undefined;
     let videoFolderUrl: string | undefined;
-    const totalFiles = selectedFiles.length;
+    const totalFiles = files.length;
     let completedFiles = 0;
 
-    const uploadPromises = selectedFiles.map(async (file) => {
+    const uploadPromises = files.map(async (file) => {
       console.log('CLIENT-UPLOAD: Preparing to upload file:', {
         name: file.name,
         type: file.type,
@@ -150,9 +154,9 @@ export function NewEntryTab() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('journeyId', journeyId);
-      formData.append('town', toTown);
-      formData.append('country', toCountry);
-      formData.append('journeyDate', arrivalDate.toISOString());
+      formData.append('town', metadata.town);
+      formData.append('country', metadata.country);
+      formData.append('journeyDate', metadata.date.toISOString());
 
       console.log('CLIENT-UPLOAD: FormData created with journey ID:', {
         fileName: file.name,
@@ -274,7 +278,10 @@ export function NewEntryTab() {
       const filesToUpload = isEvent ? eventFiles : selectedFiles;
       if (filesToUpload.length > 0) {
         setLoading(true, `Uploading ${filesToUpload.length} media file(s)...`);
-        await uploadFiles(officialEntryId);
+        const uploadMetadata = isEvent
+          ? { town: eventTown, country: eventCountry, date: eventDate }
+          : { town: toTown, country: toCountry, date: arrivalDate };
+        await uploadFiles(officialEntryId, filesToUpload, uploadMetadata);
       }
 
       // Show success toast
