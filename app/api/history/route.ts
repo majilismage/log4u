@@ -20,6 +20,9 @@ export async function GET(request: Request) {
     const limit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '10', 10) || 10))
     // Filter by entry type: 'all', 'journey', or 'event'
     const typeFilter = (url.searchParams.get('type') || 'all') as 'all' | EntryType
+    // Sort parameters
+    const sortField = (url.searchParams.get('sortField') || 'journeyDate') as 'journeyDate' | 'dateAdded'
+    const sortDirection = (url.searchParams.get('sortDirection') || 'desc') as 'asc' | 'desc'
     const { auth, googleSheetsId } = await getAuthenticatedClient();
 
     if (!googleSheetsId) {
@@ -98,25 +101,45 @@ export async function GET(request: Request) {
       }
 
       return entryObject;
-    }).sort((a, b) => new Date(b.departureDate).getTime() - new Date(a.departureDate).getTime()); // Sort by most recent date
+    });
+
+    // Helper to get sort value based on field
+    const getSortValue = (entry: any, field: string): number => {
+      if (field === 'journeyDate') {
+        // For journeys use departureDate, for events use date
+        const date = entry.departureDate || entry.date;
+        return date ? new Date(date).getTime() : 0;
+      }
+      // dateAdded - uses timestamp field
+      return entry.timestamp ? new Date(entry.timestamp).getTime() : 0;
+    };
+
+    // Sort based on field and direction
+    const sortedData = data.sort((a, b) => {
+      const aValue = getSortValue(a, sortField);
+      const bValue = getSortValue(b, sortField);
+      return sortDirection === 'desc' ? bValue - aValue : aValue - bValue;
+    });
 
     // Apply type filter
     const filteredData = typeFilter === 'all'
-      ? data
-      : data.filter(entry => entry.entryType === typeFilter);
+      ? sortedData
+      : sortedData.filter(entry => entry.entryType === typeFilter);
 
     const totalCount = filteredData.length;
     const pageData = filteredData.slice(offset, Math.min(offset + limit, totalCount))
 
     const entryIds = filteredData.map(entry => entry.journeyId).filter(id => id);
     logger.info('HISTORY: Successfully fetched history entries', {
-      totalRecords: data.length,
+      totalRecords: sortedData.length,
       filteredRecords: filteredData.length,
       typeFilter,
+      sortField,
+      sortDirection,
       entryIds: entryIds.slice(0, 10), // Log first 10 IDs only
     });
 
-    logger.info(`Successfully fetched ${pageData.length}/${totalCount} history entries for the user.`, { offset, limit, typeFilter });
+    logger.info(`Successfully fetched ${pageData.length}/${totalCount} history entries for the user.`, { offset, limit, typeFilter, sortField, sortDirection });
 
     return NextResponse.json({
       success: true,
@@ -125,6 +148,8 @@ export async function GET(request: Request) {
       offset,
       limit,
       typeFilter,
+      sortField,
+      sortDirection,
       data: pageData,
     });
 

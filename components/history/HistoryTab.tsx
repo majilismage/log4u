@@ -2,12 +2,13 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { RotateCw, AlertTriangle, Info } from "lucide-react"
+import { RotateCw, AlertTriangle, Info, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import HistoryEntryCard from "@/components/history/HistoryEntryCard"
 import EventEntryCard from "@/components/history/EventEntryCard"
 import { EntryFilterToggle, type EntryFilter } from "@/components/history/EntryFilterToggle"
+import { SortSelect, type SortField, type SortDirection } from "@/components/history/SortSelect"
 import type { JourneyEntry, JourneyEntryWithMedia, EventEntry, EventEntryWithMedia, MediaItem, EntryWithMedia, isJourneyEntry, isEventEntry } from "@/types/journey"
 import { useUnits } from "@/lib/UnitsContext"
 import { DEFAULT_UNIT_PREFERENCES } from "@/types/units"
@@ -27,16 +28,24 @@ export function HistoryTab() {
   const PAGE_SIZE = 10
   const [total, setTotal] = useState(0)
   const [entryFilter, setEntryFilter] = useState<EntryFilter>('all')
+  const [sortField, setSortField] = useState<SortField>('journeyDate')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
-  const fetchData = async (pageIndex: number, filter: EntryFilter = 'all') => {
-    console.log('[HistoryTab] fetchData called', { pageIndex, filter });
+  const fetchData = async (
+    pageIndex: number,
+    filter: EntryFilter = 'all',
+    field: SortField = 'journeyDate',
+    direction: SortDirection = 'desc'
+  ) => {
+    console.log('[HistoryTab] fetchData called', { pageIndex, filter, field, direction });
     setIsLoading(true);
     setError(null);
     try {
       const offset = pageIndex * PAGE_SIZE
       const filterParam = filter !== 'all' ? `&type=${filter}` : ''
+      const sortParams = `&sortField=${field}&sortDirection=${direction}`
       const [historyResponse, mediaResponse] = await Promise.all([
-        fetch(`/api/history?offset=${offset}&limit=${PAGE_SIZE}${filterParam}`),
+        fetch(`/api/history?offset=${offset}&limit=${PAGE_SIZE}${filterParam}${sortParams}`),
         fetch('/api/get-media')
       ]);
 
@@ -136,16 +145,50 @@ export function HistoryTab() {
     setPage(0);
   };
 
+  // Reset to page 0 when sort changes
+  const handleSortFieldChange = (newField: SortField) => {
+    setSortField(newField);
+    setPage(0);
+  };
+
+  const handleSortDirectionChange = (newDirection: SortDirection) => {
+    setSortDirection(newDirection);
+    setPage(0);
+  };
+
   useEffect(() => {
-    fetchData(page, entryFilter);
-  }, [unitPreferences, page, entryFilter]);
+    fetchData(page, entryFilter, sortField, sortDirection);
+  }, [unitPreferences, page, entryFilter, sortField, sortDirection]);
 
   return (
     <Card className="dark:bg-neutral-800 border-slate-200 dark:border-neutral-700">
       <CardContent className="space-y-4 p-4 md:p-6 min-h-[300px]">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-neutral-100">History</h1>
-          <EntryFilterToggle value={entryFilter} onChange={handleFilterChange} disabled={isLoading} />
+        {/* Header with title and unified toolbar */}
+        <div className="space-y-3 mb-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-neutral-100">
+              History
+            </h1>
+            {!isLoading && !error && total > 0 && (
+              <span className="text-sm text-slate-500 dark:text-neutral-400 tabular-nums">
+                {page * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE + entries.length, total)} of {total}
+              </span>
+            )}
+          </div>
+
+          {/* Toolbar: Sort + Filter in a single row */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <SortSelect
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSortFieldChange={handleSortFieldChange}
+                onSortDirectionChange={handleSortDirectionChange}
+                disabled={isLoading}
+              />
+              <EntryFilterToggle value={entryFilter} onChange={handleFilterChange} disabled={isLoading} />
+            </div>
+          </div>
         </div>
         
         {isLoading && (
@@ -161,7 +204,7 @@ export function HistoryTab() {
             <h2 className="text-xl font-semibold text-red-700 dark:text-red-400 mb-2">Error Loading Data</h2>
             <p className="text-slate-600 dark:text-neutral-400 text-center mb-4">{error}</p>
             <Button
-              onClick={() => fetchData(page, entryFilter)}
+              onClick={() => fetchData(page, entryFilter, sortField, sortDirection)}
               className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center"
             >
               <RotateCw className="w-4 h-4 mr-2" /> Try Again
@@ -171,14 +214,7 @@ export function HistoryTab() {
 
         {!isLoading && !error && (
           entries.length > 0 ? (
-            <div className="space-y-6">
-              <p className="text-lg text-slate-700 dark:text-neutral-300">
-                Showing {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + entries.length} of {total}
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
-                <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
-              </div>
+            <div className="space-y-4">
               {entries.map((entry, index) => {
                 const uniqueKey = entry.id && entry.id !== "" && entry.id !== "undefined" ? entry.id : `entry-${index}`;
 
@@ -204,7 +240,7 @@ export function HistoryTab() {
                         if (entries.length === 1 && page > 0) {
                           setPage(p => p - 1)
                         } else {
-                          fetchData(page, entryFilter)
+                          fetchData(page, entryFilter, sortField, sortDirection)
                         }
                       }}
                     />
@@ -231,17 +267,43 @@ export function HistoryTab() {
                         if (entries.length === 1 && page > 0) {
                           setPage(p => p - 1)
                         } else {
-                          fetchData(page, entryFilter)
+                          fetchData(page, entryFilter, sortField, sortDirection)
                         }
                       }}
                     />
                   );
                 }
               })}
-              <div className="flex gap-2">
-                <Button variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
-                <Button variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
-              </div>
+              {/* Pagination */}
+              {total > PAGE_SIZE && (
+                <div className="flex items-center justify-center gap-1 pt-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={page === 0}
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    className="h-8 px-3 text-slate-600 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-neutral-200"
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    <span className="hidden sm:inline">Previous</span>
+                    <span className="sm:hidden">Prev</span>
+                  </Button>
+                  <span className="px-3 text-sm text-slate-500 dark:text-neutral-400 tabular-nums min-w-[80px] text-center">
+                    Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={(page + 1) * PAGE_SIZE >= total}
+                    onClick={() => setPage(p => p + 1)}
+                    className="h-8 px-3 text-slate-600 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-neutral-200"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <span className="sm:hidden">Next</span>
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full py-10 p-4">
