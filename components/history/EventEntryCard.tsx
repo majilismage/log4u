@@ -6,7 +6,8 @@ import { LazyImage } from '@/components/gallery/LazyImage'
 import InlineEdit from '@/components/ui/inline-edit'
 import DropZone from '@/components/ui/drop-zone'
 import { Button } from '@/components/ui/button'
-import { Edit2, Save, X, Loader2, Trash2, Plus, Wrench, MapPin, Calendar } from 'lucide-react'
+import { Edit2, Save, X, Loader2, Trash2, Wrench, MapPin, Calendar } from 'lucide-react'
+import { MediaModal } from '@/components/gallery/MediaModal'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { format, parseISO, isValid } from 'date-fns'
@@ -38,6 +39,8 @@ export const EventEntryCard: React.FC<EventEntryCardProps> = ({
   const [editedEvent, setEditedEvent] = useState(event)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0)
   const { toast } = useToast()
 
   // Format date for display
@@ -127,6 +130,11 @@ export const EventEntryCard: React.FC<EventEntryCardProps> = ({
   const handleCancel = () => {
     setEditedEvent(event)
     setIsEditing(false)
+  }
+
+  const handleMediaClick = (index: number) => {
+    setSelectedMediaIndex(index)
+    setIsModalOpen(true)
   }
 
   return (
@@ -286,7 +294,7 @@ export const EventEntryCard: React.FC<EventEntryCardProps> = ({
             <div className="p-4 border-t border-slate-200 dark:border-neutral-700">
               <h3 className="font-semibold text-md text-slate-800 dark:text-neutral-200 mb-3">Media Gallery</h3>
               <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                {event.media.map((item) => {
+                {event.media.map((item, index) => {
                   let thumbnailUrl = ''
                   if (item.thumbnailLink && item.thumbnailLink.startsWith('https://drive.google.com/thumbnail?')) {
                     thumbnailUrl = item.thumbnailLink
@@ -299,7 +307,13 @@ export const EventEntryCard: React.FC<EventEntryCardProps> = ({
                   }
 
                   return (
-                    <div key={item.id} className="aspect-square relative group bg-slate-100 dark:bg-neutral-700 rounded-md overflow-hidden">
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleMediaClick(index)}
+                      className="aspect-square relative group bg-slate-100 dark:bg-neutral-700 rounded-md overflow-hidden cursor-pointer focus:ring-2 focus:ring-primary focus:outline-none"
+                      aria-label={`View ${item.name}`}
+                    >
                       <LazyImage
                         src={thumbnailUrl}
                         alt={item.name}
@@ -307,7 +321,7 @@ export const EventEntryCard: React.FC<EventEntryCardProps> = ({
                         className="aspect-square"
                         isVideo={item.mimeType?.startsWith('video/')}
                       />
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -348,6 +362,16 @@ export const EventEntryCard: React.FC<EventEntryCardProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Media Modal */}
+      {event.media && event.media.length > 0 && (
+        <MediaModal
+          mediaItems={event.media}
+          initialIndex={selectedMediaIndex}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+        />
+      )}
     </>
   )
 }

@@ -10,6 +10,7 @@ import DropZone from '@/components/ui/drop-zone'
 import { useEditableJourney } from '@/hooks/useEditableJourney'
 import { Button } from '@/components/ui/button'
 import { Edit2, Save, X, Loader2, Trash2, Plus, Upload } from 'lucide-react'
+import { MediaModal } from '@/components/gallery/MediaModal'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { format, parseISO, isValid } from 'date-fns'
@@ -33,18 +34,20 @@ interface EditableMediaGridProps {
   onDropFiles?: (files: File[]) => void
   onDropError?: (error: string) => void
   deletingMediaId?: string
+  onMediaClick?: (index: number) => void
 }
 
-const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({ 
-  media, 
-  isEditing, 
+const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
+  media,
+  isEditing,
   isUploading = false,
   uploadProgress,
   onDeleteMedia,
   onAddMedia,
   onDropFiles,
   onDropError,
-  deletingMediaId
+  deletingMediaId,
+  onMediaClick
 }) => {
   const [confirmMediaId, setConfirmMediaId] = useState<string | null>(null)
   const content = (
@@ -74,7 +77,7 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
       )}
 
       <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-        {media.map((item) => {
+        {media.map((item, index) => {
           // For images, construct a Google Drive thumbnail URL
           // For videos or files without thumbnails, show a placeholder
           let thumbnailUrl = ''
@@ -91,9 +94,16 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
             // Use data URI placeholder for videos or unknown types
             thumbnailUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150"%3E%3Crect width="150" height="150" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-family="system-ui" font-size="14"%3E%3C/text%3E%3C/svg%3E'
           }
-          
+
           return (
-            <div key={item.id} className="aspect-square relative group bg-slate-100 dark:bg-neutral-700 rounded-md overflow-hidden">
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => !isEditing && onMediaClick?.(index)}
+              className={`aspect-square relative group bg-slate-100 dark:bg-neutral-700 rounded-md overflow-hidden ${!isEditing ? 'cursor-pointer focus:ring-2 focus:ring-primary focus:outline-none' : ''}`}
+              disabled={isEditing}
+              aria-label={`View ${item.name}`}
+            >
               <LazyImage
                 src={thumbnailUrl}
                 alt={item.name}
@@ -108,14 +118,18 @@ const EditableMediaGrid: React.FC<EditableMediaGridProps> = ({
               )}
               {isEditing && (
                 <button
-                  onClick={() => setConfirmMediaId(item.id)}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setConfirmMediaId(item.id)
+                  }}
                   className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label={`Delete ${item.name}`}
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
               )}
-            </div>
+            </button>
           )
         })}
         
@@ -197,6 +211,8 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
   const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0)
   const { toast } = useToast()
 
   const {
@@ -426,6 +442,11 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
     input.click()
   }
 
+  const handleMediaClick = (index: number) => {
+    setSelectedMediaIndex(index)
+    setIsModalOpen(true)
+  }
+
   return (
     <>
     <div className="bg-white dark:bg-neutral-800 shadow-lg dark:shadow-neutral-900/50 rounded-xl overflow-hidden border border-slate-200 dark:border-neutral-700 transition-shadow duration-300 ease-in-out">
@@ -623,8 +644,8 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
 
         {/* Media Grid Section */}
         {(localMedia.length > 0 || isEditing) && (
-          <EditableMediaGrid 
-            media={localMedia} 
+          <EditableMediaGrid
+            media={localMedia}
             isEditing={isEditing}
             isUploading={isUploading}
             uploadProgress={uploadProgress}
@@ -633,6 +654,7 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
             onDropFiles={handleDropFiles}
             onDropError={onError}
             deletingMediaId={deletingMediaId || undefined}
+            onMediaClick={handleMediaClick}
           />
         )}
       </div>
@@ -663,6 +685,14 @@ const HistoryEntryCard: React.FC<HistoryEntryCardProps> = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Media Modal */}
+    <MediaModal
+      mediaItems={localMedia}
+      initialIndex={selectedMediaIndex}
+      isOpen={isModalOpen}
+      onClose={() => setIsModalOpen(false)}
+    />
     </>
   )
 }
