@@ -51,6 +51,7 @@ interface MapComponentProps {
   onMapClick: (lat: number, lng: number) => void;
   onCoordsChange: (type: 'from' | 'to', lat: number, lng: number) => void;
   onRouteUpdate: (index: number, route: { type: string; coordinates: number[][] }) => void;
+  onEditModeChange: (mode: 'none' | 'from' | 'to') => void;
 }
 
 const MAP_STYLE = {
@@ -81,6 +82,7 @@ export default function MapComponent({
   onMapClick,
   onCoordsChange,
   onRouteUpdate,
+  onEditModeChange,
 }: MapComponentProps) {
   const mapRef = useRef<MapRef>(null);
   const recalcAbortRef = useRef<AbortController | null>(null);
@@ -157,21 +159,6 @@ export default function MapComponent({
     }
   }, [onRouteUpdate]);
 
-  // Drag handlers — react-map-gl MarkerDragEvent has lngLat as LngLat object or array depending on version
-  const handleFromDragEnd = useCallback((e: any) => {
-    const lngLat = e.lngLat;
-    const lat = typeof lngLat.lat === 'function' ? lngLat.lat : (lngLat.lat ?? lngLat[1]);
-    const lng = typeof lngLat.lng === 'function' ? lngLat.lng : (lngLat.lng ?? lngLat[0]);
-    onCoordsChange('from', lat, lng);
-  }, [onCoordsChange]);
-
-  const handleToDragEnd = useCallback((e: any) => {
-    const lngLat = e.lngLat;
-    const lat = typeof lngLat.lat === 'function' ? lngLat.lat : (lngLat.lat ?? lngLat[1]);
-    const lng = typeof lngLat.lng === 'function' ? lngLat.lng : (lngLat.lng ?? lngLat[0]);
-    onCoordsChange('to', lat, lng);
-  }, [onCoordsChange]);
-
   // Map click handler for edit mode
   const handleClick = useCallback((e: any) => {
     if (editMode !== 'none') {
@@ -236,28 +223,60 @@ export default function MapComponent({
         />
       </Source>
 
-      {/* Current From marker (green, draggable) */}
+      {/* Current From marker (green, clickable to edit) */}
       {currentEntry && (
         <Marker
           longitude={currentEntry.fromLng}
           latitude={currentEntry.fromLat}
-          draggable={true}
-          onDragEnd={handleFromDragEnd}
-          color="#10b981"
-          scale={1.2}
-        />
+        >
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditModeChange(editMode === 'from' ? 'none' : 'from');
+            }}
+            style={{
+              width: 22,
+              height: 22,
+              background: editMode === 'from' ? '#facc15' : '#10b981',
+              borderRadius: '50%',
+              border: editMode === 'from' ? '3px solid #fef08a' : '3px solid white',
+              boxShadow: editMode === 'from'
+                ? '0 0 12px rgba(250, 204, 21, 0.7)'
+                : '0 2px 6px rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            title="Click to reposition departure"
+          />
+        </Marker>
       )}
 
-      {/* Current To marker (red, draggable) */}
+      {/* Current To marker (red, clickable to edit) */}
       {currentEntry && (
         <Marker
           longitude={currentEntry.toLng}
           latitude={currentEntry.toLat}
-          draggable={true}
-          onDragEnd={handleToDragEnd}
-          color="#ef4444"
-          scale={1.2}
-        />
+        >
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditModeChange(editMode === 'to' ? 'none' : 'to');
+            }}
+            style={{
+              width: 22,
+              height: 22,
+              background: editMode === 'to' ? '#facc15' : '#ef4444',
+              borderRadius: '50%',
+              border: editMode === 'to' ? '3px solid #fef08a' : '3px solid white',
+              boxShadow: editMode === 'to'
+                ? '0 0 12px rgba(250, 204, 21, 0.7)'
+                : '0 2px 6px rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            title="Click to reposition arrival"
+          />
+        </Marker>
       )}
     </Map>
   );

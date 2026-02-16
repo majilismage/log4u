@@ -413,6 +413,7 @@ export default function MigrationReviewPage() {
             onMapClick={handleMapClick}
             onCoordsChange={handleCoordsChange}
             onRouteUpdate={handleRouteUpdate}
+            onEditModeChange={setEditMode}
           />
           
           {/* Edit mode banner */}
