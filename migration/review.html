@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WanderNote Migration Review Tool</title>
+    <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+        }
+
+        #map {
+            flex: 1;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 350px;
+            background: #2d2d2d;
+            border-left: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 20px;
+            border-bottom: 1px solid #444;
+        }
+
+        .entry-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .confidence-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .confidence-green { background: #22c55e; }
+        .confidence-yellow { background: #eab308; }
+        .confidence-red { background: #ef4444; }
+
+        .journey-info {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section h3 {
+            font-size: 14px;
+            color: #999;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .journey-path {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .detail-label {
+            color: #999;
+        }
+
+        .detail-value {
+            color: #fff;
+        }
+
+        .coordinates {
+            background: #383838;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        .coord-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .coord-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .notes {
+            background: #383838;
+            border-radius: 6px;
+            padding: 12px;
+            min-height: 60px;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+
+        .controls {
+            padding: 20px;
+            border-top: 1px solid #444;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-approve {
+            background: #22c55e;
+            color: white;
+        }
+
+        .btn-approve:hover:not(:disabled) {
+            background: #16a34a;
+        }
+
+        .btn-edit {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-edit:hover:not(:disabled) {
+            background: #2563eb;
+        }
+
+        .btn-edit.active {
+            background: #1d4ed8;
+            box-shadow: 0 0 0 2px #60a5fa;
+        }
+
+        .btn-skip {
+            background: #eab308;
+            color: black;
+        }
+
+        .btn-skip:hover:not(:disabled) {
+            background: #ca8a04;
+        }
+
+        .btn-flag {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-flag:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .btn-nav {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-nav:hover:not(:disabled) {
+            background: #4b5563;
+        }
+
+        .progress-bar {
+            margin-top: 15px;
+        }
+
+        .progress-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .progress-track {
+            height: 6px;
+            background: #444;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            display: flex;
+        }
+
+        .progress-approved { background: #22c55e; }
+        .progress-skipped { background: #eab308; }
+        .progress-flagged { background: #ef4444; }
+
+        .edit-mode-message {
+            background: #1e40af;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        .edit-mode-message.visible {
+            display: block;
+        }
+
+        .flag-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #383838;
+            color: #fff;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .flag-input:focus {
+            outline: none;
+            border-color: #ef4444;
+        }
+
+        .maplibre-ctrl-attrib {
+            background-color: rgba(0, 0, 0, 0.7) !important;
+        }
+
+        .maplibre-ctrl-attrib a {
+            color: #fff !important;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="sidebar">
+        <div class="header">
+            <div class="entry-title">
+                <h2 id="entry-number">Loading...</h2>
+                <div id="confidence-dot" class="confidence-dot"></div>
+            </div>
+        </div>
+        
+        <div class="journey-info">
+            <div class="info-section">
+                <div id="journey-path" class="journey-path">Loading...</div>
+                <div class="detail-row">
+                    <span class="detail-label">Departure:</span>
+                    <span id="departure-date" class="detail-value">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Arrival:</span>
+                    <span id="arrival-date" class="detail-value">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Distance:</span>
+                    <span id="distance" class="detail-value">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Country:</span>
+                    <span id="country" class="detail-value">-</span>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>Coordinates</h3>
+                <div class="coordinates">
+                    <div class="coord-row">
+                        <span>From:</span>
+                        <span id="from-coords">-</span>
+                    </div>
+                    <div class="coord-row">
+                        <span>To:</span>
+                        <span id="to-coords">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>Confidence</h3>
+                <div class="detail-row">
+                    <span class="detail-label">From:</span>
+                    <span id="from-confidence" class="detail-value">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">To:</span>
+                    <span id="to-confidence" class="detail-value">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Method:</span>
+                    <span id="methods" class="detail-value">-</span>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>Notes</h3>
+                <div id="notes" class="notes">-</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div id="edit-mode-message" class="edit-mode-message">
+                Click map to set position
+            </div>
+            
+            <div class="button-group">
+                <button id="btn-approve" class="btn btn-approve">✅ Approve</button>
+                <button id="btn-skip" class="btn btn-skip">⏭️ Skip</button>
+            </div>
+            
+            <div class="button-group">
+                <button id="btn-edit-from" class="btn btn-edit">✏️ Edit From</button>
+                <button id="btn-edit-to" class="btn btn-edit">✏️ Edit To</button>
+            </div>
+            
+            <div class="button-group">
+                <button id="btn-flag" class="btn btn-flag">🚩 Flag</button>
+                <input id="flag-reason" class="flag-input" placeholder="Flag reason..." style="display: none;">
+            </div>
+            
+            <div class="button-group">
+                <button id="btn-prev" class="btn btn-nav">◀️ Prev</button>
+                <button id="btn-next" class="btn btn-nav">▶️ Next</button>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-stats">
+                    <span>Progress: <span id="progress-current">0</span>/<span id="progress-total">283</span></span>
+                    <span>Approved: <span id="progress-approved">0</span> | Skipped: <span id="progress-skipped">0</span> | Flagged: <span id="progress-flagged">0</span></span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+    <script>
+        // Global state
+        let map;
+        let entries = [];
+        let progress = { approved: [], skipped: [], flagged: [] };
+        let currentIndex = 0;
+        let editMode = null; // null, 'from', 'to'
+        let fromMarker, toMarker;
+        let currentRouteLayer = null;
+        let approvedRouteLayers = [];
+
+        // Initialize
+        async function init() {
+            try {
+                // Load data
+                const [entriesResponse, progressResponse] = await Promise.all([
+                    fetch('/api/entries'),
+                    fetch('/api/progress')
+                ]);
+                
+                entries = await entriesResponse.json();
+                progress = await progressResponse.json();
+                
+                console.log(`Loaded ${entries.length} entries`);
+                
+                // Initialize map
+                initMap();
+                
+                // Find first unprocessed entry
+                findNextEntry();
+                
+                // Setup event listeners
+                setupEventListeners();
+                
+                // Load current entry
+                loadCurrentEntry();
+                
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                alert('Failed to load data. Please check the server.');
+            }
+        }
+
+        function initMap() {
+            map = new maplibregl.Map({
+                container: 'map',
+                style: {
+                    version: 8,
+                    sources: {
+                        'osm': {
+                            type: 'raster',
+                            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                            tileSize: 256,
+                            attribution: '© OpenStreetMap contributors'
+                        }
+                    },
+                    layers: [
+                        {
+                            id: 'osm',
+                            source: 'osm',
+                            type: 'raster'
+                        }
+                    ]
+                },
+                center: [-75, 40],
+                zoom: 8
+            });
+
+            map.on('load', () => {
+                console.log('Map loaded');
+                
+                // Add approved routes
+                addApprovedRoutes();
+            });
+
+            map.on('click', (e) => {
+                if (editMode) {
+                    const lngLat = e.lngLat;
+                    updateMarkerPosition(editMode, lngLat.lat, lngLat.lng);
+                }
+            });
+        }
+
+        function addApprovedRoutes() {
+            // Add all approved routes as faded blue lines
+            progress.approved.forEach(index => {
+                const entry = entries.find(e => e.index === index);
+                if (entry && entry.route) {
+                    addApprovedRoute(entry, index);
+                }
+            });
+        }
+
+        function addApprovedRoute(entry, index) {
+            const sourceId = `approved-route-${index}`;
+            const layerId = `approved-route-layer-${index}`;
+            
+            if (!map.getSource(sourceId)) {
+                map.addSource(sourceId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: entry.route
+                    }
+                });
+                
+                map.addLayer({
+                    id: layerId,
+                    type: 'line',
+                    source: sourceId,
+                    paint: {
+                        'line-color': '#3b82f6',
+                        'line-width': 2,
+                        'line-opacity': 0.3
+                    }
+                });
+                
+                approvedRouteLayers.push(layerId);
+            }
+
+            // Add small markers for approved entries
+            const fromMarkerId = `approved-from-${index}`;
+            const toMarkerId = `approved-to-${index}`;
+            
+            if (!map.getSource(fromMarkerId)) {
+                map.addSource(fromMarkerId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [entry.fromLng, entry.fromLat]
+                        }
+                    }
+                });
+                
+                map.addLayer({
+                    id: `${fromMarkerId}-layer`,
+                    type: 'circle',
+                    source: fromMarkerId,
+                    paint: {
+                        'circle-radius': 3,
+                        'circle-color': '#22c55e',
+                        'circle-opacity': 0.5
+                    }
+                });
+            }
+            
+            if (!map.getSource(toMarkerId)) {
+                map.addSource(toMarkerId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [entry.toLng, entry.toLat]
+                        }
+                    }
+                });
+                
+                map.addLayer({
+                    id: `${toMarkerId}-layer`,
+                    type: 'circle',
+                    source: toMarkerId,
+                    paint: {
+                        'circle-radius': 3,
+                        'circle-color': '#ef4444',
+                        'circle-opacity': 0.5
+                    }
+                });
+            }
+        }
+
+        function setupEventListeners() {
+            // Buttons
+            document.getElementById('btn-approve').addEventListener('click', approveEntry);
+            document.getElementById('btn-skip').addEventListener('click', skipEntry);
+            document.getElementById('btn-flag').addEventListener('click', flagEntry);
+            document.getElementById('btn-edit-from').addEventListener('click', () => toggleEditMode('from'));
+            document.getElementById('btn-edit-to').addEventListener('click', () => toggleEditMode('to'));
+            document.getElementById('btn-prev').addEventListener('click', () => navigateEntry(-1));
+            document.getElementById('btn-next').addEventListener('click', () => navigateEntry(1));
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                
+                switch (e.key.toLowerCase()) {
+                    case 'a':
+                        e.preventDefault();
+                        approveEntry();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        skipEntry();
+                        break;
+                    case 'f':
+                        e.preventDefault();
+                        flagEntry();
+                        break;
+                    case 'arrowleft':
+                        e.preventDefault();
+                        navigateEntry(-1);
+                        break;
+                    case 'arrowright':
+                        e.preventDefault();
+                        navigateEntry(1);
+                        break;
+                }
+            });
+
+            // Flag input
+            const flagInput = document.getElementById('flag-reason');
+            flagInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    submitFlag();
+                } else if (e.key === 'Escape') {
+                    cancelFlag();
+                }
+            });
+        }
+
+        function findNextEntry() {
+            // Find first entry that's not approved, skipped, or flagged
+            for (let i = 0; i < entries.length; i++) {
+                if (!isEntryProcessed(i)) {
+                    currentIndex = i;
+                    return;
+                }
+            }
+            // If all processed, go to first entry
+            currentIndex = 0;
+        }
+
+        function isEntryProcessed(index) {
+            return progress.approved.includes(index) || 
+                   progress.skipped.includes(index) || 
+                   progress.flagged.some(item => 
+                       (typeof item === 'object' ? item.index : item) === index
+                   );
+        }
+
+        function getEntryStatus(index) {
+            if (progress.approved.includes(index)) return 'approved';
+            if (progress.skipped.includes(index)) return 'skipped';
+            if (progress.flagged.some(item => 
+                (typeof item === 'object' ? item.index : item) === index
+            )) return 'flagged';
+            return 'pending';
+        }
+
+        function loadCurrentEntry() {
+            const entry = entries[currentIndex];
+            if (!entry) return;
+
+            // Update UI
+            document.getElementById('entry-number').textContent = `Entry ${currentIndex + 1} of ${entries.length}`;
+            document.getElementById('journey-path').textContent = `${entry.from} → ${entry.to}`;
+            document.getElementById('departure-date').textContent = entry.departureDate || '-';
+            document.getElementById('arrival-date').textContent = entry.arrivalDate || '-';
+            document.getElementById('distance').textContent = entry.distanceNm ? `${entry.distanceNm} nm` : '-';
+            document.getElementById('country').textContent = entry.country || '-';
+            document.getElementById('from-coords').textContent = `${entry.fromLat.toFixed(5)}, ${entry.fromLng.toFixed(5)}`;
+            document.getElementById('to-coords').textContent = `${entry.toLat.toFixed(5)}, ${entry.toLng.toFixed(5)}`;
+            document.getElementById('from-confidence').textContent = entry.fromConfidence || '-';
+            document.getElementById('to-confidence').textContent = entry.toConfidence || '-';
+            document.getElementById('methods').textContent = `${entry.fromMethod || '-'} / ${entry.toMethod || '-'}`;
+            document.getElementById('notes').textContent = entry.notes || '(no notes)';
+
+            // Update confidence dot
+            const confidenceDot = document.getElementById('confidence-dot');
+            confidenceDot.className = 'confidence-dot';
+            if (entry.overallConfidence) {
+                confidenceDot.classList.add(`confidence-${entry.overallConfidence}`);
+            }
+
+            // Update map
+            updateMap();
+            
+            // Update progress
+            updateProgress();
+        }
+
+        function updateMap() {
+            const entry = entries[currentIndex];
+            if (!entry) return;
+
+            // Remove existing current route
+            if (currentRouteLayer) {
+                if (map.getLayer(currentRouteLayer)) {
+                    map.removeLayer(currentRouteLayer);
+                }
+                if (map.getSource('current-route')) {
+                    map.removeSource('current-route');
+                }
+            }
+
+            // Remove existing markers
+            if (fromMarker) fromMarker.remove();
+            if (toMarker) toMarker.remove();
+
+            // Add current route
+            if (entry.route) {
+                map.addSource('current-route', {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: entry.route
+                    }
+                });
+
+                currentRouteLayer = 'current-route-layer';
+                map.addLayer({
+                    id: currentRouteLayer,
+                    type: 'line',
+                    source: 'current-route',
+                    paint: {
+                        'line-color': '#3b82f6',
+                        'line-width': 4,
+                        'line-opacity': 1
+                    }
+                });
+            }
+
+            // Add markers
+            fromMarker = new maplibregl.Marker({ color: '#22c55e', scale: 1.2 })
+                .setLngLat([entry.fromLng, entry.fromLat])
+                .addTo(map);
+
+            toMarker = new maplibregl.Marker({ color: '#ef4444', scale: 1.2 })
+                .setLngLat([entry.toLng, entry.toLat])
+                .addTo(map);
+
+            // Fit bounds
+            const bounds = new maplibregl.LngLatBounds()
+                .extend([entry.fromLng, entry.fromLat])
+                .extend([entry.toLng, entry.toLat]);
+            
+            map.fitBounds(bounds, { padding: 50 });
+        }
+
+        function updateProgress() {
+            const total = entries.length;
+            const approved = progress.approved.length;
+            const skipped = progress.skipped.length;
+            const flagged = progress.flagged.length;
+            const remaining = total - approved - skipped - flagged;
+
+            document.getElementById('progress-current').textContent = currentIndex + 1;
+            document.getElementById('progress-total').textContent = total;
+            document.getElementById('progress-approved').textContent = approved;
+            document.getElementById('progress-skipped').textContent = skipped;
+            document.getElementById('progress-flagged').textContent = flagged;
+
+            // Update progress bar
+            const progressFill = document.getElementById('progress-fill');
+            const approvedPercent = (approved / total) * 100;
+            const skippedPercent = (skipped / total) * 100;
+            const flaggedPercent = (flagged / total) * 100;
+
+            progressFill.innerHTML = `
+                <div class="progress-approved" style="width: ${approvedPercent}%"></div>
+                <div class="progress-skipped" style="width: ${skippedPercent}%"></div>
+                <div class="progress-flagged" style="width: ${flaggedPercent}%"></div>
+            `;
+        }
+
+        function toggleEditMode(mode) {
+            if (editMode === mode) {
+                // Exit edit mode
+                exitEditMode();
+            } else {
+                // Enter edit mode
+                editMode = mode;
+                document.getElementById('edit-mode-message').classList.add('visible');
+                document.getElementById(`btn-edit-${mode}`).classList.add('active');
+                
+                // Remove active class from other button
+                const otherMode = mode === 'from' ? 'to' : 'from';
+                document.getElementById(`btn-edit-${otherMode}`).classList.remove('active');
+                
+                map.getCanvas().style.cursor = 'crosshair';
+            }
+        }
+
+        function exitEditMode() {
+            editMode = null;
+            document.getElementById('edit-mode-message').classList.remove('visible');
+            document.getElementById('btn-edit-from').classList.remove('active');
+            document.getElementById('btn-edit-to').classList.remove('active');
+            map.getCanvas().style.cursor = '';
+        }
+
+        async function updateMarkerPosition(mode, lat, lng) {
+            const entry = entries[currentIndex];
+            
+            // Update coordinates
+            if (mode === 'from') {
+                entry.fromLat = lat;
+                entry.fromLng = lng;
+                fromMarker.setLngLat([lng, lat]);
+            } else {
+                entry.toLat = lat;
+                entry.toLng = lng;
+                toMarker.setLngLat([lng, lat]);
+            }
+            
+            // Update coordinate display
+            document.getElementById('from-coords').textContent = `${entry.fromLat.toFixed(5)}, ${entry.fromLng.toFixed(5)}`;
+            document.getElementById('to-coords').textContent = `${entry.toLat.toFixed(5)}, ${entry.toLng.toFixed(5)}`;
+            
+            // Recalculate route
+            try {
+                const response = await fetch('/api/recalc-route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: entry.index,
+                        fromLat: entry.fromLat,
+                        fromLng: entry.fromLng,
+                        toLat: entry.toLat,
+                        toLng: entry.toLng
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    entry.route = result.route;
+                    
+                    // Update route on map
+                    if (map.getSource('current-route')) {
+                        map.getSource('current-route').setData({
+                            type: 'Feature',
+                            geometry: result.route
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Route recalculation failed:', error);
+            }
+            
+            exitEditMode();
+        }
+
+        async function approveEntry() {
+            const entry = entries[currentIndex];
+            
+            try {
+                const response = await fetch('/api/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: entry.index,
+                        fromLat: entry.fromLat,
+                        fromLng: entry.fromLng,
+                        toLat: entry.toLat,
+                        toLng: entry.toLng,
+                        notes: entry.notes
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Update progress
+                    if (!progress.approved.includes(entry.index)) {
+                        progress.approved.push(entry.index);
+                    }
+                    
+                    // Add to approved routes
+                    addApprovedRoute(entry, entry.index);
+                    
+                    // Move to next
+                    navigateToNext();
+                }
+            } catch (error) {
+                console.error('Approve failed:', error);
+                alert('Failed to approve entry');
+            }
+        }
+
+        async function skipEntry() {
+            const entry = entries[currentIndex];
+            
+            try {
+                const response = await fetch('/api/skip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ index: entry.index })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    progress.skipped.push(entry.index);
+                    navigateToNext();
+                }
+            } catch (error) {
+                console.error('Skip failed:', error);
+                alert('Failed to skip entry');
+            }
+        }
+
+        function flagEntry() {
+            const flagInput = document.getElementById('flag-reason');
+            const flagBtn = document.getElementById('btn-flag');
+            
+            if (flagInput.style.display === 'none') {
+                // Show input
+                flagInput.style.display = 'block';
+                flagInput.focus();
+                flagBtn.textContent = '✓ Submit';
+            } else {
+                submitFlag();
+            }
+        }
+
+        async function submitFlag() {
+            const entry = entries[currentIndex];
+            const reason = document.getElementById('flag-reason').value.trim();
+            
+            if (!reason) {
+                alert('Please enter a flag reason');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/flag', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        index: entry.index, 
+                        reason: reason 
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    progress.flagged.push({ index: entry.index, reason: reason });
+                    cancelFlag();
+                    navigateToNext();
+                }
+            } catch (error) {
+                console.error('Flag failed:', error);
+                alert('Failed to flag entry');
+            }
+        }
+
+        function cancelFlag() {
+            const flagInput = document.getElementById('flag-reason');
+            const flagBtn = document.getElementById('btn-flag');
+            
+            flagInput.style.display = 'none';
+            flagInput.value = '';
+            flagBtn.textContent = '🚩 Flag';
+        }
+
+        function navigateEntry(direction) {
+            const newIndex = currentIndex + direction;
+            if (newIndex >= 0 && newIndex < entries.length) {
+                currentIndex = newIndex;
+                loadCurrentEntry();
+            }
+        }
+
+        function navigateToNext() {
+            // Find next unprocessed entry
+            for (let i = currentIndex + 1; i < entries.length; i++) {
+                if (!isEntryProcessed(i)) {
+                    currentIndex = i;
+                    loadCurrentEntry();
+                    return;
+                }
+            }
+            
+            // If no unprocessed entries after current, find first unprocessed
+            for (let i = 0; i < currentIndex; i++) {
+                if (!isEntryProcessed(i)) {
+                    currentIndex = i;
+                    loadCurrentEntry();
+                    return;
+                }
+            }
+            
+            // If all processed, just go to next entry
+            if (currentIndex < entries.length - 1) {
+                currentIndex++;
+                loadCurrentEntry();
+            }
+        }
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>
