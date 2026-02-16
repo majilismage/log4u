@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallback } from 'react';
 
 interface MigrationEntry {
   index: number;
@@ -47,6 +47,8 @@ interface MapComponentProps {
   reviewState: ReviewState;
   editMode: 'none' | 'from' | 'to';
   onMapClick: (lat: number, lng: number) => void;
+  onCoordsChange: (type: 'from' | 'to', lat: number, lng: number) => void;
+  onRouteUpdate: (index: number, route: { type: string; coordinates: number[][] }) => void;
 }
 
 const MapComponent = forwardRef<any, MapComponentProps>(({ 
@@ -55,7 +57,9 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
   currentIndex, 
   reviewState, 
   editMode, 
-  onMapClick 
+  onMapClick,
+  onCoordsChange,
+  onRouteUpdate,
 }, ref) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -64,6 +68,7 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
   const [mapLoaded, setMapLoaded] = useState(false);
   const editModeRef = useRef(editMode);
   const onMapClickRef = useRef(onMapClick);
+  const recalcAbortRef = useRef<AbortController | null>(null);
 
   // Keep refs in sync
   useEffect(() => { editModeRef.current = editMode; }, [editMode]);
@@ -72,6 +77,30 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
   useImperativeHandle(ref, () => ({
     getMap: () => mapInstanceRef.current,
   }));
+
+  const recalcRoute = useCallback(async (fromLat: number, fromLng: number, toLat: number, toLng: number, index: number) => {
+    // Cancel any pending recalc
+    if (recalcAbortRef.current) recalcAbortRef.current.abort();
+    const controller = new AbortController();
+    recalcAbortRef.current = controller;
+
+    try {
+      const res = await fetch('/api/migration/calc-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromLat, fromLng, toLat, toLng }),
+        signal: controller.signal,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.route) {
+          onRouteUpdate(index, data.route);
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') console.error('Route recalc failed:', e);
+    }
+  }, [onRouteUpdate]);
 
   // Initialize map once
   useEffect(() => {
@@ -107,7 +136,6 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
         });
 
         map.on('load', () => {
-          // Add sources
           map.addSource('imported-routes', {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] },
@@ -118,7 +146,6 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
             data: { type: 'FeatureCollection', features: [] },
           });
 
-          // Imported routes layer (faded blue)
           map.addLayer({
             id: 'imported-routes-line',
             type: 'line',
@@ -127,7 +154,6 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
             paint: { 'line-color': '#3b82f6', 'line-width': 2, 'line-opacity': 0.4 },
           });
 
-          // Current route layer (bright red, thicker)
           map.addLayer({
             id: 'current-route-line',
             type: 'line',
@@ -139,7 +165,7 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
           setMapLoaded(true);
         });
 
-        // Handle map clicks — use ref to get current editMode
+        // Handle map clicks for edit mode
         map.on('click', (e: any) => {
           if (editModeRef.current !== 'none') {
             onMapClickRef.current(e.lngLat.lat, e.lngLat.lng);
@@ -231,23 +257,45 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
         });
       }
 
-      // From marker (green, larger)
+      // From marker (green, draggable)
       const fromEl = document.createElement('div');
-      fromEl.style.cssText = 'width:18px;height:18px;background:#10b981;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
-      const fromMarker = new mapLibreGL.Marker({ element: fromEl })
+      fromEl.style.cssText = 'width:20px;height:20px;background:#10b981;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:grab;';
+      fromEl.title = 'Drag to reposition departure point';
+      const fromMarker = new mapLibreGL.Marker({ element: fromEl, draggable: true })
         .setLngLat([currentEntry.fromLng, currentEntry.fromLat])
         .addTo(map);
 
-      // To marker (red, larger)
+      fromMarker.on('dragend', () => {
+        const lngLat = fromMarker.getLngLat();
+        onCoordsChange('from', lngLat.lat, lngLat.lng);
+        // Recalculate sea route with new position
+        const toEntry = entries[currentIndex];
+        if (toEntry) {
+          recalcRoute(lngLat.lat, lngLat.lng, toEntry.toLat, toEntry.toLng, currentIndex);
+        }
+      });
+
+      // To marker (red, draggable)
       const toEl = document.createElement('div');
-      toEl.style.cssText = 'width:18px;height:18px;background:#ef4444;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
-      const toMarker = new mapLibreGL.Marker({ element: toEl })
+      toEl.style.cssText = 'width:20px;height:20px;background:#ef4444;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:grab;';
+      toEl.title = 'Drag to reposition arrival point';
+      const toMarker = new mapLibreGL.Marker({ element: toEl, draggable: true })
         .setLngLat([currentEntry.toLng, currentEntry.toLat])
         .addTo(map);
 
+      toMarker.on('dragend', () => {
+        const lngLat = toMarker.getLngLat();
+        onCoordsChange('to', lngLat.lat, lngLat.lng);
+        // Recalculate sea route with new position
+        const fromEntry = entries[currentIndex];
+        if (fromEntry) {
+          recalcRoute(fromEntry.fromLat, fromEntry.fromLng, lngLat.lat, lngLat.lng, currentIndex);
+        }
+      });
+
       markersRef.current.push(fromMarker, toMarker);
 
-      // Fit bounds to current entry with good zoom
+      // Fit bounds to current entry
       const bounds = new mapLibreGL.LngLatBounds()
         .extend([currentEntry.fromLng, currentEntry.fromLat])
         .extend([currentEntry.toLng, currentEntry.toLat]);
@@ -258,7 +306,7 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
         minZoom: 4,
       });
     }
-  }, [entries, routes, currentIndex, reviewState, mapLoaded]);
+  }, [entries, routes, currentIndex, reviewState, mapLoaded, onCoordsChange, recalcRoute]);
 
   return (
     <div 

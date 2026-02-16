@@ -300,6 +300,30 @@ export default function MigrationReviewPage() {
     setEditMode('none');
   };
 
+  const handleCoordsChange = useCallback((type: 'from' | 'to', lat: number, lng: number) => {
+    setEntries(prev => {
+      const updated = [...prev];
+      const entry = { ...updated[currentIndex] };
+      if (type === 'from') {
+        entry.fromLat = lat;
+        entry.fromLng = lng;
+      } else {
+        entry.toLat = lat;
+        entry.toLng = lng;
+      }
+      updated[currentIndex] = entry;
+      return updated;
+    });
+  }, [currentIndex]);
+
+  const handleRouteUpdate = useCallback((index: number, route: { type: string; coordinates: number[][] }) => {
+    setRoutes(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], route };
+      return updated;
+    });
+  }, []);
+
   const getConfidenceBadge = (confidence: string) => {
     const colors = {
       green: 'bg-green-500',
@@ -358,6 +382,8 @@ export default function MigrationReviewPage() {
             reviewState={reviewState}
             editMode={editMode}
             onMapClick={handleMapClick}
+            onCoordsChange={handleCoordsChange}
+            onRouteUpdate={handleRouteUpdate}
           />
           
           {/* Edit mode banner */}
