@@ -43,7 +43,7 @@ interface ReviewState {
   flagged: Map<number, string>;
 }
 
-const MapLibreMap = dynamic(() => import('./MapComponent'), {
+const MapComponent = dynamic(() => import('./MapComponent'), {
   ssr: false,
   loading: () => <div className="flex-1 bg-gray-100 flex items-center justify-center">Loading map...</div>
 });
@@ -392,19 +392,16 @@ export default function MigrationReviewPage() {
   const currentRoute = getCurrentRoute();
   const isDuplicate = isCurrentEntryDuplicate();
   const progressCounts = getProgressCounts();
+  
+  // 3-route context
+  const prevEntry = currentIndex > 0 ? entries[currentIndex - 1] : null;
+  const nextEntry = currentIndex < entries.length - 1 ? entries[currentIndex + 1] : null;
 
   return (
-    <>
-      {/* MapLibre GL CSS */}
-      <link
-        href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css"
-        rel="stylesheet"
-      />
-      
-      <div className="h-screen flex">
+    <div className="h-screen flex">
         {/* Map */}
-        <div className="flex-1">
-          <MapLibreMap
+        <div className="flex-1 relative">
+          <MapComponent
             entries={entries}
             routes={routes}
             currentIndex={currentIndex}
@@ -437,10 +434,21 @@ export default function MigrationReviewPage() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 p-4 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {currentEntry && (
               <>
-                {/* Status Badge */}
+                {/* Previous entry summary */}
+                {prevEntry && (
+                  <div className="p-3 border-b border-gray-700 opacity-60">
+                    <div className="text-xs text-gray-400">Previous</div>
+                    <div className="text-sm">{prevEntry.from} → {prevEntry.to}</div>
+                    <div className="text-xs text-gray-500">{prevEntry.departureDate} · {prevEntry.distanceNm} nm</div>
+                  </div>
+                )}
+
+                {/* Current entry details */}
+                <div className="p-4">
+                  {/* Status Badge */}
                 <div className="mb-4">
                   {isDuplicate ? (
                     <div className="flex items-center">
@@ -604,6 +612,15 @@ export default function MigrationReviewPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* Next entry summary */}
+                {nextEntry && (
+                  <div className="p-3 border-t border-gray-700 opacity-60">
+                    <div className="text-xs text-gray-400">Next</div>
+                    <div className="text-sm">{nextEntry.from} → {nextEntry.to}</div>
+                    <div className="text-xs text-gray-500">{nextEntry.departureDate} · {nextEntry.distanceNm} nm</div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -624,6 +641,6 @@ export default function MigrationReviewPage() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
