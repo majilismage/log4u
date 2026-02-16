@@ -392,7 +392,7 @@ export default function MigrationReviewPage() {
   const currentRoute = getCurrentRoute();
   const isDuplicate = isCurrentEntryDuplicate();
   const progressCounts = getProgressCounts();
-  
+
   // 3-route context
   const prevEntry = currentIndex > 0 ? entries[currentIndex - 1] : null;
   const nextEntry = currentIndex < entries.length - 1 ? entries[currentIndex + 1] : null;
@@ -448,7 +448,7 @@ export default function MigrationReviewPage() {
 
                 {/* Current entry details */}
                 <div className="p-4">
-                  {/* Status Badge */}
+                {/* Status Badge */}
                 <div className="mb-4">
                   {isDuplicate ? (
                     <div className="flex items-center">
