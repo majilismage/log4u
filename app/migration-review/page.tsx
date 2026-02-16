@@ -613,6 +613,7 @@ export default function MigrationReviewPage() {
                   </div>
                 </div>
 
+                </div>
                 {/* Next entry summary */}
                 {nextEntry && (
                   <div className="p-3 border-t border-gray-700 opacity-60">
@@ -640,7 +641,6 @@ export default function MigrationReviewPage() {
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
