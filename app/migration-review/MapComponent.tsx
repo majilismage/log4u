@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 
 let L: any;
@@ -68,6 +68,7 @@ export default function MapComponent({
 }: MapComponentProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const [mapReady, setMapReady] = useState(false);
   const allLayersRef = useRef<any[]>([]);
   // Keep refs for drag-interactive elements so we can update them without full rerender
   const currentPolylineRef = useRef<any>(null);
@@ -143,6 +144,7 @@ export default function MapComponent({
       });
 
       mapRef.current = map;
+      setMapReady(true);
     };
 
     initMap();
@@ -157,7 +159,7 @@ export default function MapComponent({
 
   // Rebuild all layers when data changes (but NOT during drag)
   useEffect(() => {
-    if (!mapRef.current || !L || isDraggingRef.current) return;
+    if (!mapReady || !mapRef.current || !L || isDraggingRef.current) return;
 
     clearLayers();
 
@@ -269,7 +271,7 @@ export default function MapComponent({
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
-  }, [currentIndex, entries, routes, reviewState, editMode]);
+  }, [mapReady, currentIndex, entries, routes, reviewState, editMode]);
 
   return <div ref={mapContainerRef} data-testid="leaflet-map" className="w-full h-full" />;
 }
