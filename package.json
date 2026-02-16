@@ -75,7 +75,7 @@
     "vaul": "^0.9.6",
     "xlsx": "^0.18.5",
     "zod": "^3.24.1",
-    "searoute-js": "^1.2.1"
+    "searoute-js": "^0.1.0"
   },
   "overrides": {
     "glob": "^10.4.5",
