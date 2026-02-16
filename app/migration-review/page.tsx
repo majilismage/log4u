@@ -447,73 +447,25 @@ export default function MigrationReviewPage() {
                 )}
 
                 {/* Current entry details */}
-                <div className="p-4">
-                {/* Status Badge */}
-                <div className="mb-4">
-                  {isDuplicate ? (
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full bg-gray-500 mr-2" />
-                      <span className="text-gray-400">Already imported</span>
-                    </div>
-                  ) : reviewState.imported.has(currentIndex) ? (
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full bg-green-500 mr-2" />
-                      <span className="text-green-400">Approved</span>
-                    </div>
-                  ) : reviewState.skipped.has(currentIndex) ? (
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full bg-yellow-500 mr-2" />
-                      <span className="text-yellow-400">Skipped</span>
-                    </div>
-                  ) : reviewState.flagged.has(currentIndex) ? (
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full bg-red-500 mr-2" />
-                      <span className="text-red-400">Flagged</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      {getConfidenceBadge(currentEntry.fromConfidence)}
-                      <span className="capitalize">{currentEntry.fromConfidence} confidence</span>
-                    </div>
-                  )}
+                <div className="p-3">
+                {/* Status + Journey header */}
+                <div className="flex items-center gap-2 mb-2">
+                  {getConfidenceBadge(isDuplicate ? 'grey' : reviewState.imported.has(currentIndex) ? 'green' : reviewState.skipped.has(currentIndex) ? 'yellow' : reviewState.flagged.has(currentIndex) ? 'red' : currentEntry.fromConfidence)}
+                  <span className="font-semibold text-sm">{currentEntry.from} → {currentEntry.to}</span>
                 </div>
 
-                {/* Journey Info */}
-                <div className="mb-6">
-                  <div className="text-lg font-semibold mb-2">
-                    {currentEntry.from} → {currentEntry.to}
-                  </div>
-                  <div className="text-sm text-gray-300 space-y-1">
-                    <div>Departure: {currentEntry.departureDate}</div>
-                    <div>Arrival: {currentEntry.arrivalDate || 'N/A'}</div>
-                    <div>Distance: {currentEntry.distanceNm} nm</div>
-                    <div>Country: {currentEntry.country}</div>
-                    {currentEntry.notes && (
-                      <div className="mt-2">
-                        <div className="text-gray-400">Notes:</div>
-                        <div className="text-sm">{currentEntry.notes}</div>
-                      </div>
-                    )}
-                  </div>
+                {/* Compact info grid */}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-gray-300 mb-2">
+                  <div>{currentEntry.departureDate} → {currentEntry.arrivalDate || 'same'}</div>
+                  <div>{currentEntry.distanceNm} nm · {currentEntry.country}</div>
+                  <div className="text-gray-500">From: {currentEntry.fromLat.toFixed(4)}, {currentEntry.fromLng.toFixed(4)}</div>
+                  <div className="text-gray-500">To: {currentEntry.toLat.toFixed(4)}, {currentEntry.toLng.toFixed(4)}</div>
+                  <div className="text-gray-500">{getConfidenceBadge(currentEntry.fromConfidence)} {currentEntry.fromMethod}</div>
+                  <div className="text-gray-500">{getConfidenceBadge(currentEntry.toConfidence)} {currentEntry.toMethod}</div>
                 </div>
-
-                {/* Coordinates */}
-                <div className="mb-6">
-                  <div className="text-sm text-gray-400 mb-2">Coordinates</div>
-                  <div className="text-xs space-y-1">
-                    <div>From: {currentEntry.fromLat.toFixed(5)}, {currentEntry.fromLng.toFixed(5)}</div>
-                    <div>To: {currentEntry.toLat.toFixed(5)}, {currentEntry.toLng.toFixed(5)}</div>
-                  </div>
-                </div>
-
-                {/* Confidence Details */}
-                <div className="mb-6">
-                  <div className="text-sm text-gray-400 mb-2">Confidence Details</div>
-                  <div className="text-xs space-y-1">
-                    <div>From: {getConfidenceBadge(currentEntry.fromConfidence)} {currentEntry.fromMethod}</div>
-                    <div>To: {getConfidenceBadge(currentEntry.toConfidence)} {currentEntry.toMethod}</div>
-                  </div>
-                </div>
+                {currentEntry.notes && (
+                  <div className="text-xs text-gray-400 mb-2">Notes: {currentEntry.notes}</div>
+                )}
 
                 {/* Flag Input */}
                 {showFlagInput && (

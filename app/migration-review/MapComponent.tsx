@@ -3,7 +3,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import 'leaflet/dist/leaflet.css';
 
-// Leaflet imports - must be dynamic to avoid SSR issues
 let L: any;
 
 interface MigrationEntry {
@@ -69,60 +68,85 @@ export default function MapComponent({
 }: MapComponentProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const layersRef = useRef<{
-    importedRoutes?: any[];
-    previousRoute?: any;
-    previousMarkers?: any[];
-    currentRoute?: any;
-    currentFromMarker?: any;
-    currentToMarker?: any;
-    nextRoute?: any;
-    nextMarkers?: any[];
-  }>({});
+  const allLayersRef = useRef<any[]>([]);
+  // Keep refs for drag-interactive elements so we can update them without full rerender
+  const currentPolylineRef = useRef<any>(null);
+  const isDraggingRef = useRef(false);
+  // Refs for callbacks to avoid stale closures in Leaflet event handlers
+  const editModeRef = useRef(editMode);
+  const onMapClickRef = useRef(onMapClick);
+  const onCoordsChangeRef = useRef(onCoordsChange);
+  const onEditModeChangeRef = useRef(onEditModeChange);
+  const currentIndexRef = useRef(currentIndex);
+  const routesRef = useRef(routes);
 
-  // Initialize map
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
+  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
+  useEffect(() => { onCoordsChangeRef.current = onCoordsChange; }, [onCoordsChange]);
+  useEffect(() => { onEditModeChangeRef.current = onEditModeChange; }, [onEditModeChange]);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+  useEffect(() => { routesRef.current = routes; }, [routes]);
+
+  const makeIcon = (color: string, size = 20, highlighted = false) => {
+    if (!L) return null;
+    const border = highlighted ? '#fef08a' : 'white';
+    const shadow = highlighted ? '0 0 12px rgba(250,204,21,0.7)' : '0 2px 6px rgba(0,0,0,0.4)';
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:3px solid ${border};box-shadow:${shadow};cursor:grab"></div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+  };
+
+  // Clear all layers from map
+  const clearLayers = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    allLayersRef.current.forEach(layer => {
+      if (map.hasLayer(layer)) map.removeLayer(layer);
+    });
+    allLayersRef.current = [];
+    currentPolylineRef.current = null;
+  };
+
+  // Add a layer and track it
+  const addLayer = (layer: any) => {
+    if (!mapRef.current || !layer) return;
+    layer.addTo(mapRef.current);
+    allLayersRef.current.push(layer);
+    return layer;
+  };
+
+  // Initialize map once
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Dynamic import of Leaflet to avoid SSR issues
     const initMap = async () => {
       L = (await import('leaflet')).default;
-      
-      // Fix for missing marker icons in webpack/Next.js
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iOCIgZmlsbD0iIzNiODJmNiIvPgo8L3N2Zz4K',
-        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iOCIgZmlsbD0iIzNiODJmNiIvPgo8L3N2Zz4K',
-        shadowUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iOCIgZmlsbD0iIzNiODJmNiIvPgo8L3N2Zz4K',
-      });
 
-      // Create map
       const map = L.map(mapContainerRef.current, {
         center: [39, -76],
         zoom: 6,
         zoomControl: true,
       });
 
-      // Add tile layer
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 18,
       }).addTo(map);
 
-      // Handle map clicks for edit mode
       map.on('click', (e: any) => {
-        if (editMode !== 'none') {
-          onMapClick(e.latlng.lat, e.latlng.lng);
+        if (editModeRef.current !== 'none') {
+          onMapClickRef.current(e.latlng.lat, e.latlng.lng);
         }
       });
 
       mapRef.current = map;
-      updateMapLayers();
     };
 
     initMap();
 
-    // Cleanup
     return () => {
       if (mapRef.current) {
         mapRef.current.remove();
@@ -131,228 +155,121 @@ export default function MapComponent({
     };
   }, []);
 
-  // Update layers when data changes
+  // Rebuild all layers when data changes (but NOT during drag)
   useEffect(() => {
-    if (mapRef.current && L) {
-      updateMapLayers();
-    }
-  }, [currentIndex, entries, routes, reviewState, editMode]);
+    if (!mapRef.current || !L || isDraggingRef.current) return;
 
-  const createCustomIcon = useCallback((color: string, isHighlighted = false) => {
-    if (!L) return null;
-    
-    const shadowStyle = isHighlighted 
-      ? '0 0 12px rgba(250, 204, 21, 0.7)' 
-      : '0 2px 6px rgba(0,0,0,0.4)';
-    const borderColor = isHighlighted ? '#fef08a' : 'white';
-    
-    return L.divIcon({
-      className: '',
-      html: `<div style="width:20px;height:20px;background:${color};border-radius:50%;border:3px solid ${borderColor};box-shadow:${shadowStyle}"></div>`,
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
-    });
-  }, [L]);
-
-  const updateMapLayers = useCallback(() => {
-    if (!mapRef.current || !L) return;
+    clearLayers();
 
     const map = mapRef.current;
-    const layers = layersRef.current;
-
-    // Clear existing layers
-    Object.values(layers).flat().forEach((layer: any) => {
-      if (layer && map.hasLayer(layer)) {
-        map.removeLayer(layer);
-      }
-    });
-
-    // Reset layers reference
-    layersRef.current = {};
-
     const currentEntry = entries[currentIndex];
     const prevEntry = currentIndex > 0 ? entries[currentIndex - 1] : null;
     const nextEntry = currentIndex < entries.length - 1 ? entries[currentIndex + 1] : null;
-    
     const currentRoute = routes[currentIndex];
     const prevRoute = currentIndex > 0 ? routes[currentIndex - 1] : null;
     const nextRoute = currentIndex < routes.length - 1 ? routes[currentIndex + 1] : null;
 
-    // Calculate bounds for fit
     const bounds = L.latLngBounds([]);
-    
-    // Add imported routes (all previously approved routes)
-    const importedRouteLayers: any[] = [];
+
+    // --- Imported routes (thin, faded blue) ---
     Array.from(reviewState.imported).forEach(idx => {
       const route = routes[idx];
-      if (route && route.route.coordinates) {
-        const polyline = L.polyline(
-          route.route.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]),
+      if (route?.route?.coordinates?.length) {
+        addLayer(L.polyline(
+          route.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]),
           { color: '#3b82f6', weight: 1, opacity: 0.3 }
-        ).addTo(map);
-        importedRouteLayers.push(polyline);
+        ));
       }
     });
-    layers.importedRoutes = importedRouteLayers;
 
-    // Add previous route (grey dashed)
-    if (prevRoute && prevEntry) {
-      const prevPolyline = L.polyline(
-        prevRoute.route.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]),
-        { color: '#94a3b8', weight: 2, opacity: 0.5, dashArray: '5,10' }
-      ).addTo(map);
-      layers.previousRoute = prevPolyline;
-
-      // Add to bounds
-      prevRoute.route.coordinates.forEach(([lng, lat]: [number, number]) => {
-        bounds.extend([lat, lng]);
-      });
-
-      // Previous markers (small grey circles)
-      const prevFromMarker = L.circleMarker([prevEntry.fromLat, prevEntry.fromLng], {
-        radius: 5,
-        color: '#94a3b8',
-        fillColor: '#94a3b8',
-        fillOpacity: 0.8,
-      }).addTo(map);
-
-      const prevToMarker = L.circleMarker([prevEntry.toLat, prevEntry.toLng], {
-        radius: 5,
-        color: '#94a3b8',
-        fillColor: '#94a3b8',
-        fillOpacity: 0.8,
-      }).addTo(map);
-
-      layers.previousMarkers = [prevFromMarker, prevToMarker];
+    // --- Previous route (grey dashed, 50% opacity) ---
+    if (prevRoute?.route?.coordinates?.length && prevEntry) {
+      const coords = prevRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
+      addLayer(L.polyline(coords, { color: '#94a3b8', weight: 2, opacity: 0.5, dashArray: '5,10' }));
+      addLayer(L.circleMarker([prevEntry.fromLat, prevEntry.fromLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.5, weight: 1 }));
+      addLayer(L.circleMarker([prevEntry.toLat, prevEntry.toLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.5, weight: 1 }));
+      coords.forEach((c: number[]) => bounds.extend(c));
     }
 
-    // Add current route (bright red)
-    if (currentRoute && currentEntry) {
-      const currentPolyline = L.polyline(
-        currentRoute.route.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]),
-        { color: '#ef4444', weight: 4 }
-      ).addTo(map);
-      layers.currentRoute = currentPolyline;
+    // --- Current route (bright red) ---
+    if (currentRoute?.route?.coordinates?.length && currentEntry) {
+      const coords = currentRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
+      const polyline = addLayer(L.polyline(coords, { color: '#ef4444', weight: 4 }));
+      currentPolylineRef.current = polyline;
+      coords.forEach((c: number[]) => bounds.extend(c));
 
-      // Add to bounds
-      currentRoute.route.coordinates.forEach(([lng, lat]: [number, number]) => {
-        bounds.extend([lat, lng]);
-      });
-
-      // Try to add draggable lines plugin
-      try {
-        // This will only work if leaflet-draggable-lines is properly loaded
-        if (typeof window !== 'undefined' && (window as any).L && (window as any).L.EditableDraggableLines) {
-          const editableLine = new (window as any).L.EditableDraggableLines(currentPolyline);
-          editableLine.on('edited', (e: any) => {
-            const newCoords = e.target.getLatLngs().map((latlng: any) => [latlng.lng, latlng.lat]);
-            onRouteUpdate(currentIndex, {
-              type: 'LineString',
-              coordinates: newCoords,
-            });
-          });
-        }
-      } catch (e) {
-        console.debug('Draggable lines plugin not available:', e);
-      }
-
-      // Current From marker (green, draggable)
-      const greenIcon = createCustomIcon('#10b981', editMode === 'from');
-      const fromMarker = L.marker([currentEntry.fromLat, currentEntry.fromLng], {
-        icon: greenIcon,
+      // From marker (green, draggable)
+      const fromMarker = addLayer(L.marker([currentEntry.fromLat, currentEntry.fromLng], {
+        icon: makeIcon('#10b981', 20, editMode === 'from'),
         draggable: true,
-      }).addTo(map);
+      }));
 
-      fromMarker.on('click', () => {
-        onEditModeChange(editMode === 'from' ? 'none' : 'from');
+      fromMarker.on('click', (e: any) => {
+        L.DomEvent.stopPropagation(e);
+        onEditModeChangeRef.current(editModeRef.current === 'from' ? 'none' : 'from');
       });
+
+      fromMarker.on('dragstart', () => { isDraggingRef.current = true; });
 
       fromMarker.on('drag', (e: any) => {
-        const newLatLng = e.target.getLatLng();
-        onCoordsChange('from', newLatLng.lat, newLatLng.lng);
-        
-        // Update route polyline immediately during drag
-        if (layers.currentRoute) {
-          const coords = currentRoute.route.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
-          coords[0] = [newLatLng.lat, newLatLng.lng]; // Update first coordinate
-          layers.currentRoute.setLatLngs(coords);
+        const ll = e.target.getLatLng();
+        // Only update the polyline visually — no state changes during drag
+        if (currentPolylineRef.current) {
+          const latlngs = currentPolylineRef.current.getLatLngs();
+          latlngs[0] = L.latLng(ll.lat, ll.lng);
+          currentPolylineRef.current.setLatLngs(latlngs);
         }
       });
 
       fromMarker.on('dragend', (e: any) => {
-        const newLatLng = e.target.getLatLng();
-        onCoordsChange('from', newLatLng.lat, newLatLng.lng);
+        isDraggingRef.current = false;
+        const ll = e.target.getLatLng();
+        onCoordsChangeRef.current('from', ll.lat, ll.lng);
       });
 
-      layers.currentFromMarker = fromMarker;
-
-      // Current To marker (red, draggable)
-      const redIcon = createCustomIcon('#ef4444', editMode === 'to');
-      const toMarker = L.marker([currentEntry.toLat, currentEntry.toLng], {
-        icon: redIcon,
+      // To marker (red, draggable)
+      const toMarker = addLayer(L.marker([currentEntry.toLat, currentEntry.toLng], {
+        icon: makeIcon('#ef4444', 20, editMode === 'to'),
         draggable: true,
-      }).addTo(map);
+      }));
 
-      toMarker.on('click', () => {
-        onEditModeChange(editMode === 'to' ? 'none' : 'to');
+      toMarker.on('click', (e: any) => {
+        L.DomEvent.stopPropagation(e);
+        onEditModeChangeRef.current(editModeRef.current === 'to' ? 'none' : 'to');
       });
+
+      toMarker.on('dragstart', () => { isDraggingRef.current = true; });
 
       toMarker.on('drag', (e: any) => {
-        const newLatLng = e.target.getLatLng();
-        onCoordsChange('to', newLatLng.lat, newLatLng.lng);
-        
-        // Update route polyline immediately during drag
-        if (layers.currentRoute) {
-          const coords = currentRoute.route.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]);
-          coords[coords.length - 1] = [newLatLng.lat, newLatLng.lng]; // Update last coordinate
-          layers.currentRoute.setLatLngs(coords);
+        const ll = e.target.getLatLng();
+        if (currentPolylineRef.current) {
+          const latlngs = currentPolylineRef.current.getLatLngs();
+          latlngs[latlngs.length - 1] = L.latLng(ll.lat, ll.lng);
+          currentPolylineRef.current.setLatLngs(latlngs);
         }
       });
 
       toMarker.on('dragend', (e: any) => {
-        const newLatLng = e.target.getLatLng();
-        onCoordsChange('to', newLatLng.lat, newLatLng.lng);
+        isDraggingRef.current = false;
+        const ll = e.target.getLatLng();
+        onCoordsChangeRef.current('to', ll.lat, ll.lng);
       });
-
-      layers.currentToMarker = toMarker;
     }
 
-    // Add next route (blue dashed)
-    if (nextRoute && nextEntry) {
-      const nextPolyline = L.polyline(
-        nextRoute.route.coordinates.map(([lng, lat]: [number, number]) => [lat, lng]),
-        { color: '#60a5fa', weight: 2, opacity: 0.5, dashArray: '5,10' }
-      ).addTo(map);
-      layers.nextRoute = nextPolyline;
-
-      // Add to bounds
-      nextRoute.route.coordinates.forEach(([lng, lat]: [number, number]) => {
-        bounds.extend([lat, lng]);
-      });
-
-      // Next markers (small blue circles)
-      const nextFromMarker = L.circleMarker([nextEntry.fromLat, nextEntry.fromLng], {
-        radius: 5,
-        color: '#60a5fa',
-        fillColor: '#60a5fa',
-        fillOpacity: 0.8,
-      }).addTo(map);
-
-      const nextToMarker = L.circleMarker([nextEntry.toLat, nextEntry.toLng], {
-        radius: 5,
-        color: '#60a5fa',
-        fillColor: '#60a5fa',
-        fillOpacity: 0.8,
-      });
-
-      layers.nextMarkers = [nextFromMarker, nextToMarker];
+    // --- Next route (blue dashed, 50% opacity) ---
+    if (nextRoute?.route?.coordinates?.length && nextEntry) {
+      const coords = nextRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
+      addLayer(L.polyline(coords, { color: '#60a5fa', weight: 2, opacity: 0.5, dashArray: '5,10' }));
+      addLayer(L.circleMarker([nextEntry.fromLat, nextEntry.fromLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 0.5, weight: 1 }));
+      addLayer(L.circleMarker([nextEntry.toLat, nextEntry.toLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 0.5, weight: 1 }));
+      coords.forEach((c: number[]) => bounds.extend(c));
     }
 
-    // Fit bounds to show all visible routes
+    // Fit bounds
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [50, 50] });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
-  }, [currentIndex, entries, routes, reviewState, editMode, onCoordsChange, onEditModeChange, onRouteUpdate, createCustomIcon, L]);
+  }, [currentIndex, entries, routes, reviewState, editMode]);
 
   return <div ref={mapContainerRef} data-testid="leaflet-map" className="w-full h-full" />;
 }
