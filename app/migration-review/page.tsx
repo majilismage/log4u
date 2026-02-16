@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/lib/logger';
 
-// Dynamic import for MapLibre GL since it needs browser APIs
 import dynamic from 'next/dynamic';
 
 interface MigrationEntry {
@@ -375,7 +374,6 @@ export default function MigrationReviewPage() {
         {/* Map */}
         <div className="flex-1">
           <MapLibreMap
-            ref={mapRef}
             entries={entries}
             routes={routes}
             currentIndex={currentIndex}

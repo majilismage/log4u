@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallback } from 'react';
+import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import Map, { Marker, Source, Layer, MapRef } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 interface MigrationEntry {
   index: number;
@@ -51,35 +53,88 @@ interface MapComponentProps {
   onRouteUpdate: (index: number, route: { type: string; coordinates: number[][] }) => void;
 }
 
-const MapComponent = forwardRef<any, MapComponentProps>(({ 
-  entries, 
-  routes, 
-  currentIndex, 
-  reviewState, 
-  editMode, 
+const MAP_STYLE = {
+  version: 8 as const,
+  sources: {
+    'osm-raster': {
+      type: 'raster' as const,
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [
+    {
+      id: 'osm-tiles',
+      type: 'raster' as const,
+      source: 'osm-raster',
+    },
+  ],
+};
+
+export default function MapComponent({
+  entries,
+  routes,
+  currentIndex,
+  reviewState,
+  editMode,
   onMapClick,
   onCoordsChange,
   onRouteUpdate,
-}, ref) => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const mapLibreGLRef = useRef<any>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const editModeRef = useRef(editMode);
-  const onMapClickRef = useRef(onMapClick);
+}: MapComponentProps) {
+  const mapRef = useRef<MapRef>(null);
   const recalcAbortRef = useRef<AbortController | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
-  // Keep refs in sync
-  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
-  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
+  const currentEntry = entries[currentIndex];
+  const currentRoute = routes[currentIndex];
 
-  useImperativeHandle(ref, () => ({
-    getMap: () => mapInstanceRef.current,
-  }));
+  // Fit bounds when current entry changes
+  useEffect(() => {
+    if (!mapReady || !currentEntry || !mapRef.current) return;
 
+    const map = mapRef.current;
+    const bounds: [[number, number], [number, number]] = [
+      [Math.min(currentEntry.fromLng, currentEntry.toLng), Math.min(currentEntry.fromLat, currentEntry.toLat)],
+      [Math.max(currentEntry.fromLng, currentEntry.toLng), Math.max(currentEntry.fromLat, currentEntry.toLat)],
+    ];
+
+    map.fitBounds(bounds, {
+      padding: { top: 100, bottom: 100, left: 100, right: 100 },
+      maxZoom: 13,
+      minZoom: 4,
+      duration: 500,
+    });
+  }, [currentIndex, mapReady]); // Only refit on index change, not coord edits
+
+  // Build imported routes GeoJSON
+  const importedRoutesGeoJSON = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: Array.from(reviewState.imported)
+      .map(idx => routes[idx])
+      .filter(Boolean)
+      .map(route => ({
+        type: 'Feature' as const,
+        geometry: route.route,
+        properties: { index: route.index },
+      })),
+  }), [reviewState.imported, routes]);
+
+  // Build current route GeoJSON
+  const currentRouteGeoJSON = useMemo(() => {
+    if (!currentRoute) return { type: 'FeatureCollection' as const, features: [] };
+    return {
+      type: 'FeatureCollection' as const,
+      features: [{
+        type: 'Feature' as const,
+        geometry: currentRoute.route,
+        properties: { index: currentRoute.index },
+      }],
+    };
+  }, [currentRoute]);
+
+  // Recalculate sea route via API
   const recalcRoute = useCallback(async (fromLat: number, fromLng: number, toLat: number, toLng: number, index: number) => {
-    // Cancel any pending recalc
     if (recalcAbortRef.current) recalcAbortRef.current.abort();
     const controller = new AbortController();
     recalcAbortRef.current = controller;
@@ -102,221 +157,132 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
     }
   }, [onRouteUpdate]);
 
-  // Initialize map once
-  useEffect(() => {
-    const initMap = async () => {
-      try {
-        const mapLibreGL = await import('maplibre-gl');
-        mapLibreGLRef.current = mapLibreGL;
-        
-        if (!mapContainerRef.current || mapInstanceRef.current) return;
-
-        const map = new mapLibreGL.Map({
-          container: mapContainerRef.current,
-          style: {
-            version: 8,
-            sources: {
-              'raster-tiles': {
-                type: 'raster',
-                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                tileSize: 256,
-                attribution: '© OpenStreetMap contributors',
-              },
-            },
-            layers: [
-              {
-                id: 'simple-tiles',
-                type: 'raster',
-                source: 'raster-tiles',
-              },
-            ],
-          },
-          center: [-76, 39],
-          zoom: 6,
-        });
-
-        map.on('load', () => {
-          map.addSource('imported-routes', {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] },
-          });
-
-          map.addSource('current-route', {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] },
-          });
-
-          map.addLayer({
-            id: 'imported-routes-line',
-            type: 'line',
-            source: 'imported-routes',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#3b82f6', 'line-width': 2, 'line-opacity': 0.4 },
-          });
-
-          map.addLayer({
-            id: 'current-route-line',
-            type: 'line',
-            source: 'current-route',
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#ef4444', 'line-width': 4 },
-          });
-
-          setMapLoaded(true);
-        });
-
-        // Handle map clicks for edit mode
-        map.on('click', (e: any) => {
-          if (editModeRef.current !== 'none') {
-            onMapClickRef.current(e.lngLat.lat, e.lngLat.lng);
-          }
-        });
-
-        mapInstanceRef.current = map;
-      } catch (error) {
-        console.error('Failed to initialize map:', error);
-      }
-    };
-
-    initMap();
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []);
-
-  // Update cursor based on edit mode
-  useEffect(() => {
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.getCanvas().style.cursor = editMode !== 'none' ? 'crosshair' : '';
-    }
-  }, [editMode]);
-
-  // Update map whenever data or current entry changes
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    const mapLibreGL = mapLibreGLRef.current;
-    if (!map || !mapLoaded || entries.length === 0 || !mapLibreGL) return;
-
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
-
-    // Build imported route features
-    const importedFeatures = Array.from(reviewState.imported)
-      .map(index => routes[index])
-      .filter(Boolean)
-      .map(route => ({
-        type: 'Feature' as const,
-        geometry: route.route,
-        properties: { index: route.index },
-      }));
-
-    const importedSource = map.getSource('imported-routes');
-    if (importedSource) {
-      importedSource.setData({
-        type: 'FeatureCollection',
-        features: importedFeatures,
-      });
-    }
-
-    // Small markers for imported entries
-    Array.from(reviewState.imported).forEach(index => {
-      const entry = entries[index];
-      if (!entry) return;
-
-      [
-        [entry.fromLng, entry.fromLat],
-        [entry.toLng, entry.toLat],
-      ].forEach(([lng, lat]) => {
-        const el = document.createElement('div');
-        el.style.cssText = 'width:8px;height:8px;background:#3b82f6;border-radius:50%;border:1px solid white;';
-        const marker = new mapLibreGL.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-        markersRef.current.push(marker);
-      });
-    });
-
-    // Current entry
-    const currentEntry = entries[currentIndex];
-    const currentRoute = routes[currentIndex];
-
+  // Drag handlers
+  const handleFromDragEnd = useCallback((e: { lngLat: { lng: number; lat: number } }) => {
+    const { lat, lng } = e.lngLat;
+    onCoordsChange('from', lat, lng);
     if (currentEntry) {
-      // Current route line
-      const currentSource = map.getSource('current-route');
-      if (currentSource && currentRoute) {
-        currentSource.setData({
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: currentRoute.route,
-            properties: { index: currentRoute.index },
-          }],
-        });
-      }
-
-      // From marker (green, draggable)
-      const fromEl = document.createElement('div');
-      fromEl.style.cssText = 'width:20px;height:20px;background:#10b981;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:grab;';
-      fromEl.title = 'Drag to reposition departure point';
-      const fromMarker = new mapLibreGL.Marker({ element: fromEl, draggable: true })
-        .setLngLat([currentEntry.fromLng, currentEntry.fromLat])
-        .addTo(map);
-
-      fromMarker.on('dragend', () => {
-        const lngLat = fromMarker.getLngLat();
-        onCoordsChange('from', lngLat.lat, lngLat.lng);
-        // Recalculate sea route with new position
-        const toEntry = entries[currentIndex];
-        if (toEntry) {
-          recalcRoute(lngLat.lat, lngLat.lng, toEntry.toLat, toEntry.toLng, currentIndex);
-        }
-      });
-
-      // To marker (red, draggable)
-      const toEl = document.createElement('div');
-      toEl.style.cssText = 'width:20px;height:20px;background:#ef4444;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:grab;';
-      toEl.title = 'Drag to reposition arrival point';
-      const toMarker = new mapLibreGL.Marker({ element: toEl, draggable: true })
-        .setLngLat([currentEntry.toLng, currentEntry.toLat])
-        .addTo(map);
-
-      toMarker.on('dragend', () => {
-        const lngLat = toMarker.getLngLat();
-        onCoordsChange('to', lngLat.lat, lngLat.lng);
-        // Recalculate sea route with new position
-        const fromEntry = entries[currentIndex];
-        if (fromEntry) {
-          recalcRoute(fromEntry.fromLat, fromEntry.fromLng, lngLat.lat, lngLat.lng, currentIndex);
-        }
-      });
-
-      markersRef.current.push(fromMarker, toMarker);
-
-      // Fit bounds to current entry
-      const bounds = new mapLibreGL.LngLatBounds()
-        .extend([currentEntry.fromLng, currentEntry.fromLat])
-        .extend([currentEntry.toLng, currentEntry.toLat]);
-
-      map.fitBounds(bounds, {
-        padding: { top: 100, bottom: 100, left: 100, right: 100 },
-        maxZoom: 13,
-        minZoom: 4,
-      });
+      recalcRoute(lat, lng, currentEntry.toLat, currentEntry.toLng, currentIndex);
     }
-  }, [entries, routes, currentIndex, reviewState, mapLoaded, onCoordsChange, recalcRoute]);
+  }, [onCoordsChange, currentEntry, currentIndex, recalcRoute]);
+
+  const handleToDragEnd = useCallback((e: { lngLat: { lng: number; lat: number } }) => {
+    const { lat, lng } = e.lngLat;
+    onCoordsChange('to', lat, lng);
+    if (currentEntry) {
+      recalcRoute(currentEntry.fromLat, currentEntry.fromLng, lat, lng, currentIndex);
+    }
+  }, [onCoordsChange, currentEntry, currentIndex, recalcRoute]);
+
+  // Map click handler for edit mode
+  const handleClick = useCallback((e: any) => {
+    if (editMode !== 'none') {
+      onMapClick(e.lngLat.lat, e.lngLat.lng);
+    }
+  }, [editMode, onMapClick]);
 
   return (
-    <div 
-      ref={mapContainerRef} 
-      className="w-full h-full"
-      style={{ minHeight: '100vh' }}
-    />
+    <Map
+      ref={mapRef}
+      initialViewState={{
+        longitude: -76,
+        latitude: 39,
+        zoom: 6,
+      }}
+      style={{ width: '100%', height: '100%' }}
+      mapStyle={MAP_STYLE}
+      cursor={editMode !== 'none' ? 'crosshair' : undefined}
+      onClick={handleClick}
+      onLoad={() => setMapReady(true)}
+    >
+      {/* Imported routes (faded blue) */}
+      <Source id="imported-routes" type="geojson" data={importedRoutesGeoJSON}>
+        <Layer
+          id="imported-routes-line"
+          type="line"
+          paint={{
+            'line-color': '#3b82f6',
+            'line-width': 2,
+            'line-opacity': 0.4,
+          }}
+          layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+        />
+      </Source>
+
+      {/* Small markers for imported entries */}
+      {Array.from(reviewState.imported).map(idx => {
+        const entry = entries[idx];
+        if (!entry) return null;
+        return (
+          <span key={`imported-${idx}`}>
+            <Marker longitude={entry.fromLng} latitude={entry.fromLat}>
+              <div style={{ width: 8, height: 8, background: '#3b82f6', borderRadius: '50%', border: '1px solid white' }} />
+            </Marker>
+            <Marker longitude={entry.toLng} latitude={entry.toLat}>
+              <div style={{ width: 8, height: 8, background: '#3b82f6', borderRadius: '50%', border: '1px solid white' }} />
+            </Marker>
+          </span>
+        );
+      })}
+
+      {/* Current route (bright red) */}
+      <Source id="current-route" type="geojson" data={currentRouteGeoJSON}>
+        <Layer
+          id="current-route-line"
+          type="line"
+          paint={{
+            'line-color': '#ef4444',
+            'line-width': 4,
+          }}
+          layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+        />
+      </Source>
+
+      {/* Current From marker (green, draggable) */}
+      {currentEntry && (
+        <Marker
+          longitude={currentEntry.fromLng}
+          latitude={currentEntry.fromLat}
+          draggable
+          onDragEnd={handleFromDragEnd}
+        >
+          <div
+            style={{
+              width: 22,
+              height: 22,
+              background: '#10b981',
+              borderRadius: '50%',
+              border: '3px solid white',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              cursor: 'grab',
+            }}
+            title="Departure — drag to reposition"
+          />
+        </Marker>
+      )}
+
+      {/* Current To marker (red, draggable) */}
+      {currentEntry && (
+        <Marker
+          longitude={currentEntry.toLng}
+          latitude={currentEntry.toLat}
+          draggable
+          onDragEnd={handleToDragEnd}
+        >
+          <div
+            style={{
+              width: 22,
+              height: 22,
+              background: '#ef4444',
+              borderRadius: '50%',
+              border: '3px solid white',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              cursor: 'grab',
+            }}
+            title="Arrival — drag to reposition"
+          />
+        </Marker>
+      )}
+    </Map>
   );
-});
-
-MapComponent.displayName = 'MapComponent';
-
-export default MapComponent;
+}
