@@ -281,22 +281,51 @@ export default function MigrationReviewPage() {
     return -1; // All processed
   };
 
+  const recalcRoute = useCallback(async (fromLat: number, fromLng: number, toLat: number, toLng: number, index: number) => {
+    try {
+      const res = await fetch('/api/migration/calc-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromLat, fromLng, toLat, toLng }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.route) {
+          setRoutes(prev => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], route: data.route };
+            return updated;
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Route recalc failed:', e);
+    }
+  }, []);
+
   const handleMapClick = (lat: number, lng: number) => {
     if (editMode === 'none' || !getCurrentEntry()) return;
 
-    const updatedEntry = { ...getCurrentEntry() };
+    const entry = getCurrentEntry();
+    let newFromLat = entry.fromLat, newFromLng = entry.fromLng;
+    let newToLat = entry.toLat, newToLng = entry.toLng;
+
     if (editMode === 'from') {
-      updatedEntry.fromLat = lat;
-      updatedEntry.fromLng = lng;
+      newFromLat = lat;
+      newFromLng = lng;
     } else if (editMode === 'to') {
-      updatedEntry.toLat = lat;
-      updatedEntry.toLng = lng;
+      newToLat = lat;
+      newToLng = lng;
     }
 
+    const updatedEntry = { ...entry, fromLat: newFromLat, fromLng: newFromLng, toLat: newToLat, toLng: newToLng };
     const updatedEntries = [...entries];
     updatedEntries[currentIndex] = updatedEntry;
     setEntries(updatedEntries);
     setEditMode('none');
+
+    // Recalculate sea route with new positions
+    recalcRoute(newFromLat, newFromLng, newToLat, newToLng, currentIndex);
   };
 
   const handleCoordsChange = useCallback((type: 'from' | 'to', lat: number, lng: number) => {
@@ -306,14 +335,16 @@ export default function MigrationReviewPage() {
       if (type === 'from') {
         entry.fromLat = lat;
         entry.fromLng = lng;
+        recalcRoute(lat, lng, entry.toLat, entry.toLng, currentIndex);
       } else {
         entry.toLat = lat;
         entry.toLng = lng;
+        recalcRoute(entry.fromLat, entry.fromLng, lat, lng, currentIndex);
       }
       updated[currentIndex] = entry;
       return updated;
     });
-  }, [currentIndex]);
+  }, [currentIndex, recalcRoute]);
 
   const handleRouteUpdate = useCallback((index: number, route: { type: string; coordinates: number[][] }) => {
     setRoutes(prev => {

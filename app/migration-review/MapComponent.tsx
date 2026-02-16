@@ -157,22 +157,20 @@ export default function MapComponent({
     }
   }, [onRouteUpdate]);
 
-  // Drag handlers
-  const handleFromDragEnd = useCallback((e: { lngLat: { lng: number; lat: number } }) => {
-    const { lat, lng } = e.lngLat;
+  // Drag handlers — react-map-gl MarkerDragEvent has lngLat as LngLat object or array depending on version
+  const handleFromDragEnd = useCallback((e: any) => {
+    const lngLat = e.lngLat;
+    const lat = typeof lngLat.lat === 'function' ? lngLat.lat : (lngLat.lat ?? lngLat[1]);
+    const lng = typeof lngLat.lng === 'function' ? lngLat.lng : (lngLat.lng ?? lngLat[0]);
     onCoordsChange('from', lat, lng);
-    if (currentEntry) {
-      recalcRoute(lat, lng, currentEntry.toLat, currentEntry.toLng, currentIndex);
-    }
-  }, [onCoordsChange, currentEntry, currentIndex, recalcRoute]);
+  }, [onCoordsChange]);
 
-  const handleToDragEnd = useCallback((e: { lngLat: { lng: number; lat: number } }) => {
-    const { lat, lng } = e.lngLat;
+  const handleToDragEnd = useCallback((e: any) => {
+    const lngLat = e.lngLat;
+    const lat = typeof lngLat.lat === 'function' ? lngLat.lat : (lngLat.lat ?? lngLat[1]);
+    const lng = typeof lngLat.lng === 'function' ? lngLat.lng : (lngLat.lng ?? lngLat[0]);
     onCoordsChange('to', lat, lng);
-    if (currentEntry) {
-      recalcRoute(currentEntry.fromLat, currentEntry.fromLng, lat, lng, currentIndex);
-    }
-  }, [onCoordsChange, currentEntry, currentIndex, recalcRoute]);
+  }, [onCoordsChange]);
 
   // Map click handler for edit mode
   const handleClick = useCallback((e: any) => {
@@ -243,22 +241,11 @@ export default function MapComponent({
         <Marker
           longitude={currentEntry.fromLng}
           latitude={currentEntry.fromLat}
-          draggable
+          draggable={true}
           onDragEnd={handleFromDragEnd}
-        >
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              background: '#10b981',
-              borderRadius: '50%',
-              border: '3px solid white',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-              cursor: 'grab',
-            }}
-            title="Departure — drag to reposition"
-          />
-        </Marker>
+          color="#10b981"
+          scale={1.2}
+        />
       )}
 
       {/* Current To marker (red, draggable) */}
@@ -266,22 +253,11 @@ export default function MapComponent({
         <Marker
           longitude={currentEntry.toLng}
           latitude={currentEntry.toLat}
-          draggable
+          draggable={true}
           onDragEnd={handleToDragEnd}
-        >
-          <div
-            style={{
-              width: 22,
-              height: 22,
-              background: '#ef4444',
-              borderRadius: '50%',
-              border: '3px solid white',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-              cursor: 'grab',
-            }}
-            title="Arrival — drag to reposition"
-          />
-        </Marker>
+          color="#ef4444"
+          scale={1.2}
+        />
       )}
     </Map>
   );
