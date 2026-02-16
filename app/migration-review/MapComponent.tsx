@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
 
 interface MigrationEntry {
   index: number;
@@ -57,28 +57,33 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
   editMode, 
   onMapClick 
 }, ref) => {
-  const mapRef = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const mapLibreGLRef = useRef<any>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const editModeRef = useRef(editMode);
+  const onMapClickRef = useRef(onMapClick);
+
+  // Keep refs in sync
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
+  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
 
   useImperativeHandle(ref, () => ({
     getMap: () => mapInstanceRef.current,
   }));
 
-  // Initialize map
+  // Initialize map once
   useEffect(() => {
-    let mapLibreGL: any;
-    
     const initMap = async () => {
       try {
-        mapLibreGL = await import('maplibre-gl');
+        const mapLibreGL = await import('maplibre-gl');
         mapLibreGLRef.current = mapLibreGL;
         
-        if (!mapRef.current || mapInstanceRef.current) return;
+        if (!mapContainerRef.current || mapInstanceRef.current) return;
 
         const map = new mapLibreGL.Map({
-          container: mapRef.current,
+          container: mapContainerRef.current,
           style: {
             version: 8,
             sources: {
@@ -97,78 +102,48 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
               },
             ],
           },
-          center: [-76, 39], // Roughly centered on US East Coast
+          center: [-76, 39],
           zoom: 6,
         });
 
         map.on('load', () => {
-          // Add route line sources/layers
+          // Add sources
           map.addSource('imported-routes', {
             type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: [],
-            },
+            data: { type: 'FeatureCollection', features: [] },
           });
 
           map.addSource('current-route', {
             type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: [],
-            },
+            data: { type: 'FeatureCollection', features: [] },
           });
 
-          // Add imported routes layer (faded blue)
+          // Imported routes layer (faded blue)
           map.addLayer({
             id: 'imported-routes-line',
             type: 'line',
             source: 'imported-routes',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round',
-            },
-            paint: {
-              'line-color': '#3b82f6',
-              'line-width': 2,
-              'line-opacity': 0.4,
-            },
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#3b82f6', 'line-width': 2, 'line-opacity': 0.4 },
           });
 
-          // Add current route layer (bright color)
+          // Current route layer (bright red, thicker)
           map.addLayer({
             id: 'current-route-line',
             type: 'line',
             source: 'current-route',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round',
-            },
-            paint: {
-              'line-color': '#ef4444',
-              'line-width': 3,
-            },
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#ef4444', 'line-width': 4 },
           });
 
-          updateMap();
+          setMapLoaded(true);
         });
 
-        // Handle map clicks for editing
-        map.on('click', (e) => {
-          if (editMode !== 'none') {
-            onMapClick(e.lngLat.lat, e.lngLat.lng);
+        // Handle map clicks — use ref to get current editMode
+        map.on('click', (e: any) => {
+          if (editModeRef.current !== 'none') {
+            onMapClickRef.current(e.lngLat.lat, e.lngLat.lng);
           }
-        });
-
-        // Update cursor based on edit mode
-        map.on('mouseenter', () => {
-          if (editMode !== 'none') {
-            map.getCanvas().style.cursor = 'crosshair';
-          }
-        });
-
-        map.on('mouseleave', () => {
-          map.getCanvas().style.cursor = '';
         });
 
         mapInstanceRef.current = map;
@@ -187,69 +162,55 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
     };
   }, []);
 
-  // Update map cursor based on edit mode
+  // Update cursor based on edit mode
   useEffect(() => {
     if (mapInstanceRef.current) {
-      const canvas = mapInstanceRef.current.getCanvas();
-      canvas.style.cursor = editMode !== 'none' ? 'crosshair' : '';
+      mapInstanceRef.current.getCanvas().style.cursor = editMode !== 'none' ? 'crosshair' : '';
     }
   }, [editMode]);
 
-  // Update map data when entries/routes change
-  const updateMap = () => {
+  // Update map whenever data or current entry changes
+  useEffect(() => {
     const map = mapInstanceRef.current;
     const mapLibreGL = mapLibreGLRef.current;
-    if (!map || !map.isStyleLoaded() || entries.length === 0 || !mapLibreGL) return;
+    if (!map || !mapLoaded || entries.length === 0 || !mapLibreGL) return;
 
     // Clear existing markers
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
-    // Add imported route lines
+    // Build imported route features
     const importedFeatures = Array.from(reviewState.imported)
       .map(index => routes[index])
       .filter(Boolean)
       .map(route => ({
-        type: 'Feature',
+        type: 'Feature' as const,
         geometry: route.route,
         properties: { index: route.index },
       }));
 
-    map.getSource('imported-routes').setData({
-      type: 'FeatureCollection',
-      features: importedFeatures,
-    });
+    const importedSource = map.getSource('imported-routes');
+    if (importedSource) {
+      importedSource.setData({
+        type: 'FeatureCollection',
+        features: importedFeatures,
+      });
+    }
 
-    // Add small markers for imported entries
+    // Small markers for imported entries
     Array.from(reviewState.imported).forEach(index => {
       const entry = entries[index];
       if (!entry) return;
 
-      // From marker (small blue) - using custom DOM element
-      const fromEl = document.createElement('div');
-      fromEl.style.width = '8px';
-      fromEl.style.height = '8px';
-      fromEl.style.backgroundColor = '#3b82f6';
-      fromEl.style.borderRadius = '50%';
-      fromEl.style.border = '1px solid white';
-      
-      const fromMarker = new mapLibreGL.Marker(fromEl)
-        .setLngLat([entry.fromLng, entry.fromLat])
-        .addTo(map);
-
-      // To marker (small blue)
-      const toEl = document.createElement('div');
-      toEl.style.width = '8px';
-      toEl.style.height = '8px';
-      toEl.style.backgroundColor = '#3b82f6';
-      toEl.style.borderRadius = '50%';
-      toEl.style.border = '1px solid white';
-      
-      const toMarker = new mapLibreGL.Marker(toEl)
-        .setLngLat([entry.toLng, entry.toLat])
-        .addTo(map);
-
-      markersRef.current.push(fromMarker, toMarker);
+      [
+        [entry.fromLng, entry.fromLat],
+        [entry.toLng, entry.toLat],
+      ].forEach(([lng, lat]) => {
+        const el = document.createElement('div');
+        el.style.cssText = 'width:8px;height:8px;background:#3b82f6;border-radius:50%;border:1px solid white;';
+        const marker = new mapLibreGL.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+        markersRef.current.push(marker);
+      });
     });
 
     // Current entry
@@ -258,8 +219,9 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
 
     if (currentEntry) {
       // Current route line
-      if (currentRoute) {
-        map.getSource('current-route').setData({
+      const currentSource = map.getSource('current-route');
+      if (currentSource && currentRoute) {
+        currentSource.setData({
           type: 'FeatureCollection',
           features: [{
             type: 'Feature',
@@ -269,50 +231,38 @@ const MapComponent = forwardRef<any, MapComponentProps>(({
         });
       }
 
-      // Current entry markers (larger, green for From, red for To)
-      const currentFromEl = document.createElement('div');
-      currentFromEl.style.width = '16px';
-      currentFromEl.style.height = '16px';
-      currentFromEl.style.backgroundColor = '#10b981';
-      currentFromEl.style.borderRadius = '50%';
-      currentFromEl.style.border = '2px solid white';
-      currentFromEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-      
-      const fromMarker = new mapLibreGL.Marker(currentFromEl)
+      // From marker (green, larger)
+      const fromEl = document.createElement('div');
+      fromEl.style.cssText = 'width:18px;height:18px;background:#10b981;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
+      const fromMarker = new mapLibreGL.Marker({ element: fromEl })
         .setLngLat([currentEntry.fromLng, currentEntry.fromLat])
         .addTo(map);
 
-      const currentToEl = document.createElement('div');
-      currentToEl.style.width = '16px';
-      currentToEl.style.height = '16px';
-      currentToEl.style.backgroundColor = '#ef4444';
-      currentToEl.style.borderRadius = '50%';
-      currentToEl.style.border = '2px solid white';
-      currentToEl.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-      
-      const toMarker = new mapLibreGL.Marker(currentToEl)
+      // To marker (red, larger)
+      const toEl = document.createElement('div');
+      toEl.style.cssText = 'width:18px;height:18px;background:#ef4444;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
+      const toMarker = new mapLibreGL.Marker({ element: toEl })
         .setLngLat([currentEntry.toLng, currentEntry.toLat])
         .addTo(map);
 
       markersRef.current.push(fromMarker, toMarker);
 
-      // Fit bounds to show both markers
+      // Fit bounds to current entry with good zoom
       const bounds = new mapLibreGL.LngLatBounds()
         .extend([currentEntry.fromLng, currentEntry.fromLat])
         .extend([currentEntry.toLng, currentEntry.toLat]);
 
-      map.fitBounds(bounds, { padding: 50 });
+      map.fitBounds(bounds, {
+        padding: { top: 100, bottom: 100, left: 100, right: 100 },
+        maxZoom: 13,
+        minZoom: 4,
+      });
     }
-  };
-
-  // Update map when data changes
-  useEffect(() => {
-    updateMap();
-  }, [entries, routes, currentIndex, reviewState]);
+  }, [entries, routes, currentIndex, reviewState, mapLoaded]);
 
   return (
     <div 
-      ref={mapRef} 
+      ref={mapContainerRef} 
       className="w-full h-full"
       style={{ minHeight: '100vh' }}
     />
