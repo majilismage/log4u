@@ -131,31 +131,71 @@ export default function MigrationReviewPage() {
       setEntries(entriesData);
       setRoutes(routesData);
 
-      // Check for duplicates
-      const checkDuplicatesRes = await fetch('/api/migration/check-duplicates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entries: entriesData.map((entry: MigrationEntry) => ({
-            departureDate: entry.departureDate,
-            fromTown: extractTown(entry.from),
-            toTown: extractTown(entry.to),
-          }))
-        })
-      });
+      // Fetch confirmed entries from Google Sheet + check duplicates in parallel
+      const [checkDuplicatesRes, confirmedRes] = await Promise.all([
+        fetch('/api/migration/check-duplicates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entries: entriesData.map((entry: MigrationEntry) => ({
+              departureDate: entry.departureDate,
+              fromTown: extractTown(entry.from),
+              toTown: extractTown(entry.to),
+            }))
+          })
+        }),
+        fetch('/api/migration/confirmed-entries')
+      ]);
 
       if (checkDuplicatesRes.ok) {
         const { duplicates: duplicateList } = await checkDuplicatesRes.json();
         setDuplicates(new Set(duplicateList));
 
-        // Mark duplicates as imported
+        // Build lookup of confirmed entries by key
+        let confirmedByKey: Record<string, any> = {};
+        if (confirmedRes.ok) {
+          const { entries: confirmedEntries } = await confirmedRes.json();
+          confirmedEntries.forEach((ce: any) => {
+            confirmedByKey[ce.key] = ce;
+          });
+        }
+
+        // Mark duplicates as imported + overlay confirmed coords
         const importedIndices = new Set<number>();
+        const updatedEntries = [...entriesData];
+        const updatedRoutes = [...routesData];
+
         entriesData.forEach((entry: MigrationEntry, index: number) => {
           const key = `${entry.departureDate}|${extractTown(entry.from)}|${extractTown(entry.to)}`;
           if (duplicateList.includes(key)) {
             importedIndices.add(index);
+
+            // Overlay confirmed sheet data (coords may have been edited before approval)
+            const confirmed = confirmedByKey[key];
+            if (confirmed && confirmed.fromLat && confirmed.toLat) {
+              updatedEntries[index] = {
+                ...entry,
+                fromLat: confirmed.fromLat,
+                fromLng: confirmed.fromLng,
+                toLat: confirmed.toLat,
+                toLng: confirmed.toLng,
+              };
+              // Update route endpoints to match confirmed coords
+              if (updatedRoutes[index]?.route?.coordinates?.length) {
+                const coords = [...updatedRoutes[index].route.coordinates];
+                coords[0] = [confirmed.fromLng, confirmed.fromLat];
+                coords[coords.length - 1] = [confirmed.toLng, confirmed.toLat];
+                updatedRoutes[index] = {
+                  ...updatedRoutes[index],
+                  route: { ...updatedRoutes[index].route, coordinates: coords }
+                };
+              }
+            }
           }
         });
+
+        setEntries(updatedEntries);
+        setRoutes(updatedRoutes);
 
         setReviewState(prev => ({
           ...prev,
