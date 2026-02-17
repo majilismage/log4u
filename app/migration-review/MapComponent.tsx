@@ -138,24 +138,21 @@ export default function MapComponent({
     if (!L || !mapRef.current) return;
     const dist = totalDistanceNm(latlngs);
     const mid = midpointAlongLine(latlngs);
-    const labelHtml = `<div style="background:rgba(0,0,0,0.8);color:#fff;padding:4px 12px;border-radius:6px;font-size:14px;font-weight:600;white-space:nowrap;pointer-events:none;line-height:1.4">${dist.toFixed(1)} nm</div>`;
+    const labelHtml = `<div style="display:flex;justify-content:center;align-items:center;width:100%;height:100%"><div style="background:rgba(0,0,0,0.8);color:#fff;padding:4px 14px;border-radius:6px;font-size:14px;font-weight:600;white-space:nowrap;pointer-events:none;line-height:1.4">${dist.toFixed(1)} nm</div></div>`;
+
+    const iconOpts = {
+      className: '',
+      html: labelHtml,
+      iconSize: [120, 30] as [number, number],
+      iconAnchor: [60, 15] as [number, number],
+    };
 
     if (distanceLabelRef.current && mapRef.current.hasLayer(distanceLabelRef.current)) {
       distanceLabelRef.current.setLatLng([mid.lat, mid.lng]);
-      distanceLabelRef.current.setIcon(L.divIcon({
-        className: '',
-        html: labelHtml,
-        iconSize: [0, 0],
-        iconAnchor: [0, 0],
-      }));
+      distanceLabelRef.current.setIcon(L.divIcon(iconOpts));
     } else {
       const marker = L.marker([mid.lat, mid.lng], {
-        icon: L.divIcon({
-          className: '',
-          html: labelHtml,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0],
-        }),
+        icon: L.divIcon(iconOpts),
         interactive: false,
         zIndexOffset: 1000,
       });
