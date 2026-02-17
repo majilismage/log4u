@@ -13,7 +13,7 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react'],
   },
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+    removeConsole: false,
   },
   // Disable caching in development to prevent Chrome issues
   headers() {

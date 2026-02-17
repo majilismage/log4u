@@ -113,10 +113,14 @@ export function isWater(lat: number, lng: number): boolean {
 
 /** Snap a lat/lng to nearest water (spiral search using best grid) */
 export function snapToWater(lat: number, lng: number, maxRadius = 50): [number, number] {
-  if (!isLandAt(lat, lng)) return [lat, lng];
+  if (!isLandAt(lat, lng)) {
+    console.log(`[sea-router] snapToWater(${lat.toFixed(4)}, ${lng.toFixed(4)}): already on water`);
+    return [lat, lng];
+  }
 
   const region = findRegion(lat, lng);
   const res = region && regional ? regional.resolution : globalRes;
+  console.log(`[sea-router] snapToWater(${lat.toFixed(4)}, ${lng.toFixed(4)}): ON LAND, searching (res=${res}°, region=${region?.name || 'global'})...`);
 
   for (let r = 1; r <= maxRadius; r++) {
     for (let dr = -r; dr <= r; dr++) {
@@ -124,10 +128,14 @@ export function snapToWater(lat: number, lng: number, maxRadius = 50): [number, 
         if (Math.abs(dr) !== r && Math.abs(dc) !== r) continue;
         const testLat = lat + dr * res;
         const testLng = lng + dc * res;
-        if (!isLandAt(testLat, testLng)) return [testLat, testLng];
+        if (!isLandAt(testLat, testLng)) {
+          console.log(`[sea-router] snapToWater: snapped to (${testLat.toFixed(4)}, ${testLng.toFixed(4)}) at radius ${r}`);
+          return [testLat, testLng];
+        }
       }
     }
   }
+  console.warn(`[sea-router] snapToWater: FAILED to find water within radius ${maxRadius}!`);
   return [lat, lng];
 }
 
@@ -140,13 +148,21 @@ export function findSeaRoute(
   toLat: number, toLng: number,
   maxIterations = 500000
 ): [number, number][] | null {
-  if (!globalData) return null;
+  if (!globalData) {
+    console.warn('[sea-router] findSeaRoute called but grid not loaded!');
+    return null;
+  }
 
   // Snap endpoints to water
   const [sLat, sLng] = snapToWater(fromLat, fromLng);
   const [eLat, eLng] = snapToWater(toLat, toLng);
 
-  if (isLandAt(sLat, sLng) || isLandAt(eLat, eLng)) return null;
+  console.log(`[sea-router] findSeaRoute: snapped (${fromLat.toFixed(4)},${fromLng.toFixed(4)})→(${sLat.toFixed(4)},${sLng.toFixed(4)}), (${toLat.toFixed(4)},${toLng.toFixed(4)})→(${eLat.toFixed(4)},${eLng.toFixed(4)})`);
+
+  if (isLandAt(sLat, sLng) || isLandAt(eLat, eLng)) {
+    console.warn(`[sea-router] findSeaRoute: endpoints still on land after snap!`);
+    return null;
+  }
 
   // Determine grid resolution: use regional if both endpoints are in the same region
   const startRegion = findRegion(sLat, sLng);
