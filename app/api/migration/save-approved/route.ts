@@ -96,14 +96,66 @@ export async function POST(request: Request) {
       ],
     ];
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: googleSheetsId,
-      range: 'A1',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: values,
-      },
-    });
+    // Find correct insertion row to maintain departure date order (oldest first)
+    const newDate = entry.departureDate; // format: YYYY-MM-DD or similar sortable string
+    let insertRowIndex = -1; // -1 means append at end
+
+    if (existingRows && existingRows.length > 0) {
+      for (let i = 0; i < existingRows.length; i++) {
+        const rowDate = existingRows[i][1] || ''; // Col B = departureDate
+        if (rowDate > newDate) {
+          insertRowIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (insertRowIndex === -1) {
+      // Append at end
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: googleSheetsId,
+        range: 'A1',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values },
+      });
+    } else {
+      // Insert a new row at the correct position (row index is 0-based data + 2 for header)
+      const sheetRowIndex = insertRowIndex + 1; // +1 for header row (1-indexed in sheets)
+      
+      // Get the sheet ID (first sheet)
+      const spreadsheet = await sheets.spreadsheets.get({
+        spreadsheetId: googleSheetsId,
+        fields: 'sheets.properties.sheetId',
+      });
+      const sheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: googleSheetsId,
+        requestBody: {
+          requests: [
+            {
+              insertDimension: {
+                range: {
+                  sheetId,
+                  dimension: 'ROWS',
+                  startIndex: sheetRowIndex,
+                  endIndex: sheetRowIndex + 1,
+                },
+                inheritFromBefore: false,
+              },
+            },
+          ],
+        },
+      });
+
+      // Write data into the new row
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: googleSheetsId,
+        range: `A${sheetRowIndex + 1}:T${sheetRowIndex + 1}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values },
+      });
+    }
 
     logger.info('Migration entry saved successfully', {
       entryId,
