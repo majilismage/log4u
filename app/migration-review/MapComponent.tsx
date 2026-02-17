@@ -200,14 +200,11 @@ export default function MapComponent({
         zoomControl: true,
       });
 
-      // Esri Ocean basemap — clearly shows water vs land with nautical context
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri — Sources: GEBCO, NOAA, National Geographic',
-        maxZoom: 16,
-      }).addTo(map);
-      // Labels overlay
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 16,
+      // CartoDB Voyager — clear water/land distinction, full zoom range
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20,
       }).addTo(map);
 
       map.on('click', (e: any) => {
