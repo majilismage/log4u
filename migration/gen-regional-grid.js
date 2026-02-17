@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate regional water/land grids at 0.01° (~1.1km) resolution.
+ * Generate regional water/land grids at 0.005° (~550m) resolution.
  * Uses Natural Earth 10m land polygons, exploded into individual polygons
  * for efficient bbox filtering.
  */
@@ -10,7 +10,7 @@ const turf = require('@turf/turf');
 const fs = require('fs');
 const path = require('path');
 
-const RESOLUTION = 0.01;
+const RESOLUTION = 0.005;
 
 const REGIONS = [
   { name: 'americas', minLat: 20, maxLat: 45, minLng: -89, maxLng: -53 },
@@ -25,7 +25,7 @@ async function main() {
 
   // Explode multipolygons into individual polygons, then simplify
   // Simplify to half the grid resolution — preserves features at grid scale
-  const SIMPLIFY_TOL = RESOLUTION / 2; // 0.005°
+  const SIMPLIFY_TOL = RESOLUTION / 2; // 0.0025°
   const allPolygons = [];
   let totalVertsBefore = 0, totalVertsAfter = 0;
   let result;

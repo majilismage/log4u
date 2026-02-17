@@ -146,7 +146,7 @@ export function snapToWater(lat: number, lng: number, maxRadius = 50): [number, 
 export function findSeaRoute(
   fromLat: number, fromLng: number,
   toLat: number, toLng: number,
-  maxIterations = 500000
+  maxIterations = 2000000
 ): [number, number][] | null {
   if (!globalData) {
     console.warn('[sea-router] findSeaRoute called but grid not loaded!');
