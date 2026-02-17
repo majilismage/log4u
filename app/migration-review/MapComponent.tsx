@@ -82,6 +82,7 @@ export default function MapComponent({
   const currentIndexRef = useRef(currentIndex);
   const routesRef = useRef(routes);
   const waypointMarkersRef = useRef<any[]>([]);
+  const distanceLabelRef = useRef<any>(null);
 
   useEffect(() => { editModeRef.current = editMode; }, [editMode]);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
@@ -122,6 +123,7 @@ export default function MapComponent({
     allLayersRef.current = [];
     currentPolylineRef.current = null;
     waypointMarkersRef.current = [];
+    distanceLabelRef.current = null;
   };
 
   const addLayer = (layer: any) => {
@@ -130,6 +132,38 @@ export default function MapComponent({
     allLayersRef.current.push(layer);
     return layer;
   };
+
+  // Update or create the distance label on the current route polyline
+  const updateDistanceLabel = useCallback((latlngs: any[]) => {
+    if (!L || !mapRef.current) return;
+    const dist = totalDistanceNm(latlngs);
+    const mid = midpointAlongLine(latlngs);
+    const labelHtml = `<div style="background:rgba(0,0,0,0.75);color:#fff;padding:2px 8px;border-radius:4px;font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none">${dist.toFixed(1)} nm</div>`;
+
+    if (distanceLabelRef.current && mapRef.current.hasLayer(distanceLabelRef.current)) {
+      distanceLabelRef.current.setLatLng([mid.lat, mid.lng]);
+      distanceLabelRef.current.setIcon(L.divIcon({
+        className: '',
+        html: labelHtml,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      }));
+    } else {
+      const marker = L.marker([mid.lat, mid.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: labelHtml,
+          iconSize: [0, 0],
+          iconAnchor: [0, 0],
+        }),
+        interactive: false,
+        zIndexOffset: 1000,
+      });
+      marker.addTo(mapRef.current);
+      allLayersRef.current.push(marker);
+      distanceLabelRef.current = marker;
+    }
+  }, []);
 
   // Update polyline + persist route coordinates from current waypoint/endpoint positions
   const syncRouteFromMarkers = (
@@ -145,6 +179,7 @@ export default function MapComponent({
     if (currentPolylineRef.current) {
       currentPolylineRef.current.setLatLngs(latlngs);
     }
+    updateDistanceLabel(latlngs);
     // Persist as GeoJSON [lng, lat]
     const coords = latlngs.map((ll: any) => [ll.lng, ll.lat]);
     onRouteUpdateRef.current(currentIndexRef.current, { type: 'LineString', coordinates: coords });
@@ -324,6 +359,9 @@ export default function MapComponent({
 
       waypointMarkersRef.current = wpMarkers;
 
+      // Show distance label on current route
+      updateDistanceLabel(routeCoords.map((c: number[]) => ({ lat: c[0], lng: c[1] })));
+
       // Click on polyline to add a new waypoint
       polyline.on('click', (e: any) => {
         L.DomEvent.stopPropagation(e);
@@ -398,6 +436,46 @@ export default function MapComponent({
   }, [mapReady, currentIndex, entries, routes, reviewState, editMode]);
 
   return <div ref={mapContainerRef} data-testid="leaflet-map" className="w-full h-full" />;
+}
+
+// Haversine distance between two lat/lng points in nautical miles
+function haversineNm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3440.065; // Earth radius in nautical miles
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Total distance of a polyline in nautical miles
+function totalDistanceNm(latlngs: any[]): number {
+  let total = 0;
+  for (let i = 0; i < latlngs.length - 1; i++) {
+    total += haversineNm(latlngs[i].lat, latlngs[i].lng, latlngs[i + 1].lat, latlngs[i + 1].lng);
+  }
+  return total;
+}
+
+// Find the geographic midpoint along a polyline (by cumulative distance)
+function midpointAlongLine(latlngs: any[]): { lat: number; lng: number } {
+  if (latlngs.length === 0) return { lat: 0, lng: 0 };
+  if (latlngs.length === 1) return { lat: latlngs[0].lat, lng: latlngs[0].lng };
+  const total = totalDistanceNm(latlngs);
+  const half = total / 2;
+  let acc = 0;
+  for (let i = 0; i < latlngs.length - 1; i++) {
+    const seg = haversineNm(latlngs[i].lat, latlngs[i].lng, latlngs[i + 1].lat, latlngs[i + 1].lng);
+    if (acc + seg >= half) {
+      const frac = seg > 0 ? (half - acc) / seg : 0;
+      return {
+        lat: latlngs[i].lat + frac * (latlngs[i + 1].lat - latlngs[i].lat),
+        lng: latlngs[i].lng + frac * (latlngs[i + 1].lng - latlngs[i].lng),
+      };
+    }
+    acc += seg;
+  }
+  return { lat: latlngs[latlngs.length - 1].lat, lng: latlngs[latlngs.length - 1].lng };
 }
 
 // Helper: distance from point to line segment (in lat/lng space, good enough for click detection)
