@@ -38,23 +38,10 @@ export async function POST(request: Request) {
       fallback: true,
     });
   } catch (error: any) {
-    // Fallback to straight line on any error
-    try {
-      const { fromLat, fromLng, toLat, toLng } = await request.clone().json();
-      return NextResponse.json({
-        success: true,
-        route: {
-          type: 'LineString',
-          coordinates: [[fromLng, fromLat], [toLng, toLat]],
-        },
-        distanceNm: null,
-        fallback: true,
-      });
-    } catch {
-      return NextResponse.json(
-        { error: 'Failed to calculate route' },
-        { status: 500 }
-      );
-    }
+    console.error('calc-route error:', error?.message || error);
+    return NextResponse.json(
+      { error: 'Failed to calculate route', detail: error?.message },
+      { status: 500 }
+    );
   }
 }
