@@ -70,7 +70,6 @@ export default function MapComponent({
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
   const allLayersRef = useRef<any[]>([]);
-  // Keep refs for drag-interactive elements so we can update them without full rerender
   const currentPolylineRef = useRef<any>(null);
   const isDraggingRef = useRef(false);
   const skipFitBoundsRef = useRef(false);
@@ -78,13 +77,16 @@ export default function MapComponent({
   const editModeRef = useRef(editMode);
   const onMapClickRef = useRef(onMapClick);
   const onCoordsChangeRef = useRef(onCoordsChange);
+  const onRouteUpdateRef = useRef(onRouteUpdate);
   const onEditModeChangeRef = useRef(onEditModeChange);
   const currentIndexRef = useRef(currentIndex);
   const routesRef = useRef(routes);
+  const waypointMarkersRef = useRef<any[]>([]);
 
   useEffect(() => { editModeRef.current = editMode; }, [editMode]);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
   useEffect(() => { onCoordsChangeRef.current = onCoordsChange; }, [onCoordsChange]);
+  useEffect(() => { onRouteUpdateRef.current = onRouteUpdate; }, [onRouteUpdate]);
   useEffect(() => { onEditModeChangeRef.current = onEditModeChange; }, [onEditModeChange]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
   useEffect(() => { routesRef.current = routes; }, [routes]);
@@ -101,7 +103,16 @@ export default function MapComponent({
     });
   };
 
-  // Clear all layers from map
+  const makeWaypointIcon = () => {
+    if (!L) return null;
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:12px;height:12px;background:#f59e0b;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);cursor:grab"></div>`,
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    });
+  };
+
   const clearLayers = () => {
     const map = mapRef.current;
     if (!map) return;
@@ -110,14 +121,33 @@ export default function MapComponent({
     });
     allLayersRef.current = [];
     currentPolylineRef.current = null;
+    waypointMarkersRef.current = [];
   };
 
-  // Add a layer and track it
   const addLayer = (layer: any) => {
     if (!mapRef.current || !layer) return;
     layer.addTo(mapRef.current);
     allLayersRef.current.push(layer);
     return layer;
+  };
+
+  // Update polyline + persist route coordinates from current waypoint/endpoint positions
+  const syncRouteFromMarkers = (
+    fromLatLng: any,
+    toLatLng: any,
+    waypointMarkers: any[]
+  ) => {
+    const latlngs = [
+      fromLatLng,
+      ...waypointMarkers.map((m: any) => m.getLatLng()),
+      toLatLng,
+    ];
+    if (currentPolylineRef.current) {
+      currentPolylineRef.current.setLatLngs(latlngs);
+    }
+    // Persist as GeoJSON [lng, lat]
+    const coords = latlngs.map((ll: any) => [ll.lng, ll.lat]);
+    onRouteUpdateRef.current(currentIndexRef.current, { type: 'LineString', coordinates: coords });
   };
 
   // Initialize map once
@@ -185,7 +215,7 @@ export default function MapComponent({
       }
     });
 
-    // --- Previous route (grey dashed, 50% opacity) ---
+    // --- Previous route (grey dashed, full opacity) ---
     if (prevRoute?.route?.coordinates?.length && prevEntry) {
       const coords = prevRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
       addLayer(L.polyline(coords, { color: '#94a3b8', weight: 2, opacity: 1, dashArray: '5,10' }));
@@ -194,12 +224,16 @@ export default function MapComponent({
       coords.forEach((c: number[]) => bounds.extend(c));
     }
 
-    // --- Current route (bright red) ---
-    if (currentRoute?.route?.coordinates?.length && currentEntry) {
-      const coords = currentRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
-      const polyline = addLayer(L.polyline(coords, { color: '#ef4444', weight: 4 }));
+    // --- Current route (bright red, editable) ---
+    if (currentEntry) {
+      // Build coordinates: start + waypoints + end
+      const routeCoords = currentRoute?.route?.coordinates?.length
+        ? currentRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng])
+        : [[currentEntry.fromLat, currentEntry.fromLng], [currentEntry.toLat, currentEntry.toLng]];
+
+      const polyline = addLayer(L.polyline(routeCoords, { color: '#ef4444', weight: 4 }));
       currentPolylineRef.current = polyline;
-      coords.forEach((c: number[]) => bounds.extend(c));
+      routeCoords.forEach((c: number[]) => bounds.extend(c));
 
       // From marker (green, draggable)
       const fromMarker = addLayer(L.marker([currentEntry.fromLat, currentEntry.fromLng], {
@@ -214,20 +248,14 @@ export default function MapComponent({
 
       fromMarker.on('dragstart', () => { isDraggingRef.current = true; });
 
-      fromMarker.on('drag', (e: any) => {
-        const ll = e.target.getLatLng();
-        // Only update the polyline visually — no state changes during drag
-        if (currentPolylineRef.current) {
-          const latlngs = currentPolylineRef.current.getLatLngs();
-          latlngs[0] = L.latLng(ll.lat, ll.lng);
-          currentPolylineRef.current.setLatLngs(latlngs);
-        }
+      fromMarker.on('drag', () => {
+        syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
       });
 
-      fromMarker.on('dragend', (e: any) => {
+      fromMarker.on('dragend', () => {
         isDraggingRef.current = false;
         skipFitBoundsRef.current = true;
-        const ll = e.target.getLatLng();
+        const ll = fromMarker.getLatLng();
         onCoordsChangeRef.current('from', ll.lat, ll.lng);
       });
 
@@ -244,24 +272,116 @@ export default function MapComponent({
 
       toMarker.on('dragstart', () => { isDraggingRef.current = true; });
 
-      toMarker.on('drag', (e: any) => {
-        const ll = e.target.getLatLng();
-        if (currentPolylineRef.current) {
-          const latlngs = currentPolylineRef.current.getLatLngs();
-          latlngs[latlngs.length - 1] = L.latLng(ll.lat, ll.lng);
-          currentPolylineRef.current.setLatLngs(latlngs);
-        }
+      toMarker.on('drag', () => {
+        syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
       });
 
-      toMarker.on('dragend', (e: any) => {
+      toMarker.on('dragend', () => {
         isDraggingRef.current = false;
         skipFitBoundsRef.current = true;
-        const ll = e.target.getLatLng();
+        const ll = toMarker.getLatLng();
         onCoordsChangeRef.current('to', ll.lat, ll.lng);
+      });
+
+      // --- Waypoint markers (intermediate points, draggable) ---
+      // Skip first and last coords (those are the from/to endpoints)
+      const waypointCoords = routeCoords.slice(1, -1);
+      const wpMarkers: any[] = [];
+
+      waypointCoords.forEach((coord: number[], _wpIdx: number) => {
+        const wpMarker = addLayer(L.marker(coord, {
+          icon: makeWaypointIcon(),
+          draggable: true,
+        }));
+
+        wpMarker.on('dragstart', () => { isDraggingRef.current = true; });
+
+        wpMarker.on('drag', () => {
+          syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+        });
+
+        wpMarker.on('dragend', () => {
+          isDraggingRef.current = false;
+          skipFitBoundsRef.current = true;
+          syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+        });
+
+        // Right-click to remove waypoint
+        wpMarker.on('contextmenu', (e: any) => {
+          L.DomEvent.stopPropagation(e);
+          L.DomEvent.preventDefault(e);
+          const idx = waypointMarkersRef.current.indexOf(wpMarker);
+          if (idx !== -1) {
+            waypointMarkersRef.current.splice(idx, 1);
+            if (mapRef.current?.hasLayer(wpMarker)) mapRef.current.removeLayer(wpMarker);
+            skipFitBoundsRef.current = true;
+            syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+          }
+        });
+
+        wpMarkers.push(wpMarker);
+      });
+
+      waypointMarkersRef.current = wpMarkers;
+
+      // Click on polyline to add a new waypoint
+      polyline.on('click', (e: any) => {
+        L.DomEvent.stopPropagation(e);
+        const clickLatLng = e.latlng;
+
+        // Find which segment was clicked (closest segment)
+        const allLatLngs = [
+          fromMarker.getLatLng(),
+          ...waypointMarkersRef.current.map((m: any) => m.getLatLng()),
+          toMarker.getLatLng(),
+        ];
+
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < allLatLngs.length - 1; i++) {
+          const d = distToSegment(clickLatLng, allLatLngs[i], allLatLngs[i + 1]);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+          }
+        }
+
+        // Insert new waypoint after bestIdx (which is the index in the waypoints array)
+        const insertIdx = bestIdx; // position in waypointMarkers array
+        const newWp = L.marker([clickLatLng.lat, clickLatLng.lng], {
+          icon: makeWaypointIcon(),
+          draggable: true,
+        });
+        addLayer(newWp);
+
+        newWp.on('dragstart', () => { isDraggingRef.current = true; });
+        newWp.on('drag', () => {
+          syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+        });
+        newWp.on('dragend', () => {
+          isDraggingRef.current = false;
+          skipFitBoundsRef.current = true;
+          syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+        });
+        newWp.on('contextmenu', (ev: any) => {
+          L.DomEvent.stopPropagation(ev);
+          L.DomEvent.preventDefault(ev);
+          const idx = waypointMarkersRef.current.indexOf(newWp);
+          if (idx !== -1) {
+            waypointMarkersRef.current.splice(idx, 1);
+            if (mapRef.current?.hasLayer(newWp)) mapRef.current.removeLayer(newWp);
+            skipFitBoundsRef.current = true;
+            syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+          }
+        });
+
+        waypointMarkersRef.current.splice(insertIdx, 0, newWp);
+        skipFitBoundsRef.current = true;
+        syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
       });
     }
 
-    // --- Next route (blue dashed, 50% opacity) ---
+    // --- Next route (blue dashed, full opacity) ---
     if (nextRoute?.route?.coordinates?.length && nextEntry) {
       const coords = nextRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
       addLayer(L.polyline(coords, { color: '#60a5fa', weight: 2, opacity: 1, dashArray: '5,10' }));
@@ -270,7 +390,7 @@ export default function MapComponent({
       coords.forEach((c: number[]) => bounds.extend(c));
     }
 
-    // Fit bounds (skip after drag to preserve user's zoom/pan)
+    // Fit bounds (skip after drag/edit to preserve user's zoom/pan)
     if (bounds.isValid() && !skipFitBoundsRef.current) {
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
@@ -278,4 +398,18 @@ export default function MapComponent({
   }, [mapReady, currentIndex, entries, routes, reviewState, editMode]);
 
   return <div ref={mapContainerRef} data-testid="leaflet-map" className="w-full h-full" />;
+}
+
+// Helper: distance from point to line segment (in lat/lng space, good enough for click detection)
+function distToSegment(p: any, a: any, b: any): number {
+  const dx = b.lng - a.lng;
+  const dy = b.lat - a.lat;
+  if (dx === 0 && dy === 0) {
+    return Math.sqrt((p.lng - a.lng) ** 2 + (p.lat - a.lat) ** 2);
+  }
+  let t = ((p.lng - a.lng) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy);
+  t = Math.max(0, Math.min(1, t));
+  const projLng = a.lng + t * dx;
+  const projLat = a.lat + t * dy;
+  return Math.sqrt((p.lng - projLng) ** 2 + (p.lat - projLat) ** 2);
 }

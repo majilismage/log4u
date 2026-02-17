@@ -281,63 +281,32 @@ export default function MigrationReviewPage() {
     return -1; // All processed
   };
 
-  const recalcRoute = useCallback(async (fromLat: number, fromLng: number, toLat: number, toLng: number, index: number) => {
-    try {
-      const res = await fetch('/api/migration/calc-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fromLat, fromLng, toLat, toLng }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.route) {
-          setRoutes(prev => {
-            const updated = [...prev];
-            updated[index] = { ...updated[index], route: data.route };
-            return updated;
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Route recalc failed:', e);
-    }
-  }, []);
-
   const handleMapClick = (lat: number, lng: number) => {
     if (editMode === 'none' || !getCurrentEntry()) return;
 
     const entry = getCurrentEntry();
-    let newFromLat = entry.fromLat, newFromLng = entry.fromLng;
-    let newToLat = entry.toLat, newToLng = entry.toLng;
+    const updatedEntry = { ...entry };
 
     if (editMode === 'from') {
-      newFromLat = lat;
-      newFromLng = lng;
+      updatedEntry.fromLat = lat;
+      updatedEntry.fromLng = lng;
     } else if (editMode === 'to') {
-      newToLat = lat;
-      newToLng = lng;
+      updatedEntry.toLat = lat;
+      updatedEntry.toLng = lng;
     }
 
-    const updatedEntry = { ...entry, fromLat: newFromLat, fromLng: newFromLng, toLat: newToLat, toLng: newToLng };
     const updatedEntries = [...entries];
     updatedEntries[currentIndex] = updatedEntry;
     setEntries(updatedEntries);
-    setEditMode('none');
 
-    // Recalculate sea route with new positions
-    recalcRoute(newFromLat, newFromLng, newToLat, newToLng, currentIndex);
-  };
-
-  const handleCoordsChange = useCallback((type: 'from' | 'to', lat: number, lng: number) => {
-    // Optimistically patch the route's endpoint so the polyline doesn't snap back
-    // while we wait for the async sea-route recalculation
+    // Update route endpoint to match
     setRoutes(prev => {
       const updated = [...prev];
       const route = updated[currentIndex];
       if (route?.route?.coordinates?.length) {
         const coords = [...route.route.coordinates];
-        if (type === 'from') {
-          coords[0] = [lng, lat]; // GeoJSON is [lng, lat]
+        if (editMode === 'from') {
+          coords[0] = [lng, lat];
         } else {
           coords[coords.length - 1] = [lng, lat];
         }
@@ -346,22 +315,24 @@ export default function MigrationReviewPage() {
       return updated;
     });
 
+    setEditMode('none');
+  };
+
+  const handleCoordsChange = useCallback((type: 'from' | 'to', lat: number, lng: number) => {
     setEntries(prev => {
       const updated = [...prev];
       const entry = { ...updated[currentIndex] };
       if (type === 'from') {
         entry.fromLat = lat;
         entry.fromLng = lng;
-        recalcRoute(lat, lng, entry.toLat, entry.toLng, currentIndex);
       } else {
         entry.toLat = lat;
         entry.toLng = lng;
-        recalcRoute(entry.fromLat, entry.fromLng, lat, lng, currentIndex);
       }
       updated[currentIndex] = entry;
       return updated;
     });
-  }, [currentIndex, recalcRoute]);
+  }, [currentIndex]);
 
   const handleRouteUpdate = useCallback((index: number, route: { type: string; coordinates: number[][] }) => {
     setRoutes(prev => {

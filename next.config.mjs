@@ -11,7 +11,6 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ['lucide-react'],
-    serverComponentsExternalPackages: ['searoute-js', 'geojson-path-finder'],
   },
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
