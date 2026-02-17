@@ -83,6 +83,7 @@ export default function MapComponent({
   const routesRef = useRef(routes);
   const waypointMarkersRef = useRef<any[]>([]);
   const distanceLabelRef = useRef<any>(null);
+  const hitAreaRef = useRef<any>(null);
 
   useEffect(() => { editModeRef.current = editMode; }, [editMode]);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
@@ -108,9 +109,9 @@ export default function MapComponent({
     if (!L) return null;
     return L.divIcon({
       className: '',
-      html: `<div style="width:12px;height:12px;background:#f59e0b;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);cursor:grab"></div>`,
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
+      html: `<div style="width:14px;height:14px;background:#f59e0b;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);cursor:grab"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
     });
   };
 
@@ -124,6 +125,7 @@ export default function MapComponent({
     currentPolylineRef.current = null;
     waypointMarkersRef.current = [];
     distanceLabelRef.current = null;
+    hitAreaRef.current = null;
   };
 
   const addLayer = (layer: any) => {
@@ -176,6 +178,9 @@ export default function MapComponent({
     if (currentPolylineRef.current) {
       currentPolylineRef.current.setLatLngs(latlngs);
     }
+    if (hitAreaRef.current) {
+      hitAreaRef.current.setLatLngs(latlngs);
+    }
     updateDistanceLabel(latlngs);
     // Persist as GeoJSON [lng, lat]
     const coords = latlngs.map((ll: any) => [ll.lng, ll.lat]);
@@ -205,6 +210,11 @@ export default function MapComponent({
           onMapClickRef.current(e.latlng.lat, e.latlng.lng);
         }
       });
+
+      // Add custom cursor styles for route interaction
+      const style = document.createElement('style');
+      style.textContent = `.route-hit-area { cursor: crosshair !important; }`;
+      document.head.appendChild(style);
 
       mapRef.current = map;
       setMapReady(true);
@@ -263,7 +273,10 @@ export default function MapComponent({
         ? currentRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng])
         : [[currentEntry.fromLat, currentEntry.fromLng], [currentEntry.toLat, currentEntry.toLng]];
 
-      const polyline = addLayer(L.polyline(routeCoords, { color: '#ef4444', weight: 4 }));
+      // Invisible fat polyline for easier click target
+      const hitArea = addLayer(L.polyline(routeCoords, { color: 'transparent', weight: 20, interactive: true, className: 'route-hit-area' }));
+      hitAreaRef.current = hitArea;
+      const polyline = addLayer(L.polyline(routeCoords, { color: '#ef4444', weight: 4, interactive: false }));
       currentPolylineRef.current = polyline;
       routeCoords.forEach((c: number[]) => bounds.extend(c));
 
@@ -360,7 +373,7 @@ export default function MapComponent({
       updateDistanceLabel(routeCoords.map((c: number[]) => ({ lat: c[0], lng: c[1] })));
 
       // Click on polyline to add a new waypoint
-      polyline.on('click', (e: any) => {
+      hitArea.on('click', (e: any) => {
         L.DomEvent.stopPropagation(e);
         const clickLatLng = e.latlng;
 
