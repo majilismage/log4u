@@ -138,7 +138,7 @@ export default function MapComponent({
     if (!L || !mapRef.current) return;
     const dist = totalDistanceNm(latlngs);
     const mid = midpointAlongLine(latlngs);
-    const labelHtml = `<div style="background:rgba(0,0,0,0.75);color:#fff;padding:2px 8px;border-radius:4px;font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none">${dist.toFixed(1)} nm</div>`;
+    const labelHtml = `<div style="background:rgba(0,0,0,0.8);color:#fff;padding:4px 12px;border-radius:6px;font-size:14px;font-weight:600;white-space:nowrap;pointer-events:none;line-height:1.4">${dist.toFixed(1)} nm</div>`;
 
     if (distanceLabelRef.current && mapRef.current.hasLayer(distanceLabelRef.current)) {
       distanceLabelRef.current.setLatLng([mid.lat, mid.lng]);
