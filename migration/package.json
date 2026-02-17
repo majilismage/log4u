@@ -10,6 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "searoute-js": "^0.1.0"
+    "@turf/turf": "^7.3.4",
+    "searoute-js": "^0.1.0",
+    "shapefile": "^0.6.6"
   }
 }

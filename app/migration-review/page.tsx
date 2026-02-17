@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/lib/logger';
+import { loadWaterGrid, snapToWater, findSeaRoute } from '@/lib/sea-router';
 
 import dynamic from 'next/dynamic';
 
@@ -66,10 +67,70 @@ export default function MigrationReviewPage() {
   const [saving, setSaving] = useState(false);
   const mapRef = useRef<any>(null);
 
-  // Load data on mount
+  const [waterGridReady, setWaterGridReady] = useState(false);
+  const routedIndicesRef = useRef<Set<number>>(new Set());
+
+  // Load water grid + data on mount
   useEffect(() => {
+    loadWaterGrid().then(() => setWaterGridReady(true)).catch(console.error);
     loadData();
   }, []);
+
+  // When current entry changes, snap endpoints to water and compute sea route if needed
+  useEffect(() => {
+    if (!waterGridReady || entries.length === 0) return;
+
+    // Process current + prev + next
+    const indicesToRoute = [currentIndex];
+    if (currentIndex > 0) indicesToRoute.push(currentIndex - 1);
+    if (currentIndex < entries.length - 1) indicesToRoute.push(currentIndex + 1);
+
+    for (const idx of indicesToRoute) {
+      // Skip already-routed entries and confirmed (imported) entries
+      if (routedIndicesRef.current.has(idx) || reviewState.imported.has(idx)) continue;
+      routedIndicesRef.current.add(idx);
+
+      const entry = entries[idx];
+      if (!entry) continue;
+
+      // Snap endpoints to water
+      const [snappedFromLat, snappedFromLng] = snapToWater(entry.fromLat, entry.fromLng);
+      const [snappedToLat, snappedToLng] = snapToWater(entry.toLat, entry.toLng);
+
+      const coordsChanged = snappedFromLat !== entry.fromLat || snappedFromLng !== entry.fromLng ||
+        snappedToLat !== entry.toLat || snappedToLng !== entry.toLng;
+
+      if (coordsChanged) {
+        setEntries(prev => {
+          const updated = [...prev];
+          updated[idx] = {
+            ...updated[idx],
+            fromLat: snappedFromLat,
+            fromLng: snappedFromLng,
+            toLat: snappedToLat,
+            toLng: snappedToLng,
+          };
+          return updated;
+        });
+      }
+
+      // Compute sea route via A*
+      const seaRoute = findSeaRoute(snappedFromLat, snappedFromLng, snappedToLat, snappedToLng);
+      if (seaRoute && seaRoute.length >= 2) {
+        setRoutes(prev => {
+          const updated = [...prev];
+          updated[idx] = {
+            ...updated[idx],
+            route: {
+              type: 'LineString',
+              coordinates: seaRoute.map(([lat, lng]) => [lng, lat]), // GeoJSON [lng, lat]
+            },
+          };
+          return updated;
+        });
+      }
+    }
+  }, [waterGridReady, currentIndex, entries.length, reviewState.imported]);
 
   // Keyboard shortcuts
   useEffect(() => {
