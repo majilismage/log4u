@@ -1,25 +1,34 @@
 import { NextResponse } from 'next/server';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const searoute = require('searoute-js');
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
+  let fromLat: number, fromLng: number, toLat: number, toLng: number;
+
   try {
-    const { fromLat, fromLng, toLat, toLng } = await request.json();
+    ({ fromLat, fromLng, toLat, toLng } = await request.json());
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
-    if (fromLat == null || fromLng == null || toLat == null || toLng == null) {
-      return NextResponse.json(
-        { error: 'fromLat, fromLng, toLat, toLng are all required' },
-        { status: 400 }
-      );
-    }
+  if (fromLat == null || fromLng == null || toLat == null || toLng == null) {
+    return NextResponse.json(
+      { error: 'fromLat, fromLng, toLat, toLng are all required' },
+      { status: 400 }
+    );
+  }
 
-    const origin = [fromLng, fromLat]; // GeoJSON is [lng, lat]
-    const destination = [toLng, toLat];
+  const origin = [fromLng, fromLat]; // GeoJSON is [lng, lat]
+  const destination = [toLng, toLat];
 
+  try {
+    // Dynamic require to avoid bundling issues
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const searoute = require('searoute-js');
     const result = searoute(origin, destination, 'nm');
 
-    if (result && result.geometry) {
+    if (result?.geometry) {
       return NextResponse.json({
         success: true,
         route: result.geometry,
@@ -27,21 +36,25 @@ export async function POST(request: Request) {
       });
     }
 
-    // Fallback to straight line if searoute can't find a path
+    // searoute returned null — no path found
     return NextResponse.json({
       success: true,
-      route: {
-        type: 'LineString',
-        coordinates: [origin, destination],
-      },
+      route: { type: 'LineString', coordinates: [origin, destination] },
       distanceNm: null,
       fallback: true,
     });
-  } catch (error: any) {
-    console.error('calc-route error:', error?.message || error);
-    return NextResponse.json(
-      { error: 'Failed to calculate route', detail: error?.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    // Log even with removeConsole (use process.stdout directly)
+    process.stdout.write(`calc-route error: ${message}\n${stack || ''}\n`);
+
+    return NextResponse.json({
+      success: true,
+      route: { type: 'LineString', coordinates: [origin, destination] },
+      distanceNm: null,
+      fallback: true,
+      error: message,
+    });
   }
 }
