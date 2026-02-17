@@ -249,7 +249,7 @@ export default function MapComponent({
     const prevRoute = currentIndex > 0 ? routes[currentIndex - 1] : null;
     const nextRoute = currentIndex < routes.length - 1 ? routes[currentIndex + 1] : null;
 
-    const bounds = L.latLngBounds([]);
+    const currentBounds = L.latLngBounds([]);
 
     // --- Imported routes (thin, faded blue) ---
     Array.from(reviewState.imported).forEach(idx => {
@@ -268,7 +268,6 @@ export default function MapComponent({
       addLayer(L.polyline(coords, { color: '#94a3b8', weight: 6, opacity: 1, dashArray: '8,14' }));
       addLayer(L.circleMarker([prevEntry.fromLat, prevEntry.fromLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 1, weight: 1 }));
       addLayer(L.circleMarker([prevEntry.toLat, prevEntry.toLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 1, weight: 1 }));
-      coords.forEach((c: number[]) => bounds.extend(c));
     }
 
     // --- Current route (bright red, editable) ---
@@ -283,7 +282,7 @@ export default function MapComponent({
       hitAreaRef.current = hitArea;
       const polyline = addLayer(L.polyline(routeCoords, { color: '#ef4444', weight: 4, interactive: false }));
       currentPolylineRef.current = polyline;
-      routeCoords.forEach((c: number[]) => bounds.extend(c));
+      routeCoords.forEach((c: number[]) => currentBounds.extend(c));
 
       // From marker (green, draggable)
       const fromMarker = addLayer(L.marker([currentEntry.fromLat, currentEntry.fromLng], {
@@ -465,12 +464,11 @@ export default function MapComponent({
       addLayer(L.polyline(coords, { color: '#60a5fa', weight: 6, opacity: 1, dashArray: '8,14' }));
       addLayer(L.circleMarker([nextEntry.fromLat, nextEntry.fromLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 1, weight: 1 }));
       addLayer(L.circleMarker([nextEntry.toLat, nextEntry.toLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 1, weight: 1 }));
-      coords.forEach((c: number[]) => bounds.extend(c));
     }
 
-    // Fit bounds (skip after drag/edit to preserve user's zoom/pan)
-    if (bounds.isValid() && !skipFitBoundsRef.current) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    // Fit bounds to current route only (skip after drag/edit to preserve user's zoom/pan)
+    if (currentBounds.isValid() && !skipFitBoundsRef.current) {
+      map.fitBounds(currentBounds, { padding: [60, 60], maxZoom: 14 });
     }
     skipFitBoundsRef.current = false;
   }, [mapReady, currentIndex, entries, routes, reviewState, editMode]);
