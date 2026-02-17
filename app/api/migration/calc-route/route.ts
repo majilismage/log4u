@@ -26,9 +26,23 @@ export async function POST(request: Request) {
     // Dynamic require to avoid bundling issues
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const searoute = require('searoute-js');
+
+    // searoute throws if origin/destination snap to the same network node
+    // (produces a 1-point path, which turf.lineString rejects)
+    // Guard: if points are very close (<0.01°), skip sea routing
+    const dist = Math.abs(fromLat - toLat) + Math.abs(fromLng - toLng);
+    if (dist < 0.01) {
+      return NextResponse.json({
+        success: true,
+        route: { type: 'LineString', coordinates: [origin, destination] },
+        distanceNm: 0,
+        fallback: true,
+      });
+    }
+
     const result = searoute(origin, destination, 'nm');
 
-    if (result?.geometry) {
+    if (result?.geometry?.coordinates?.length >= 2) {
       return NextResponse.json({
         success: true,
         route: result.geometry,
@@ -36,7 +50,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // searoute returned null — no path found
+    // searoute returned null or a degenerate path
     return NextResponse.json({
       success: true,
       route: { type: 'LineString', coordinates: [origin, destination] },
