@@ -62,6 +62,7 @@ export default function MigrationReviewPage() {
     flagged: new Map(),
   });
   const [editMode, setEditMode] = useState<'none' | 'from' | 'to'>('none');
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [flagText, setFlagText] = useState('');
   const [showFlagInput, setShowFlagInput] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -78,7 +79,7 @@ export default function MigrationReviewPage() {
 
   // When current entry changes, snap endpoints to water and compute sea route if needed
   useEffect(() => {
-    if (!waterGridReady || entries.length === 0) return;
+    if (!waterGridReady || !dataLoaded || entries.length === 0) return;
 
     // Process current + prev + next
     const indicesToRoute = [currentIndex];
@@ -132,7 +133,7 @@ export default function MigrationReviewPage() {
         });
       }
     }
-  }, [waterGridReady, currentIndex, entries.length, reviewState.imported]);
+  }, [waterGridReady, dataLoaded, currentIndex, entries.length, reviewState.imported]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -275,6 +276,7 @@ export default function MigrationReviewPage() {
       }
 
       setLoading(false);
+      setDataLoaded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
       setLoading(false);
