@@ -380,6 +380,7 @@ export default function MapComponent({
       // Click on polyline to add a new waypoint
       hitArea.on('mousedown', (e: any) => {
         L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
         const clickLatLng = e.latlng;
 
         // Find which segment was clicked (closest segment)
@@ -399,8 +400,8 @@ export default function MapComponent({
           }
         }
 
-        // Insert new waypoint after bestIdx (which is the index in the waypoints array)
-        const insertIdx = bestIdx; // position in waypointMarkers array
+        // Insert new waypoint after bestIdx
+        const insertIdx = bestIdx;
         const newWp = L.marker([clickLatLng.lat, clickLatLng.lng], {
           icon: makeWaypointIcon(),
           draggable: true,
@@ -432,25 +433,29 @@ export default function MapComponent({
         skipFitBoundsRef.current = true;
         syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
 
-        // Immediately start dragging the new waypoint (click-and-drag in one action)
-        if (newWp.dragging) {
-          // Small delay to let Leaflet finish processing the mousedown
-          setTimeout(() => {
-            if (newWp.dragging) {
-              newWp.dragging.enable();
-              // Simulate mousedown on the marker to start drag
-              const markerEl = newWp.getElement();
-              if (markerEl && e.originalEvent) {
-                const syntheticDown = new MouseEvent('mousedown', {
-                  bubbles: true,
-                  clientX: e.originalEvent.clientX,
-                  clientY: e.originalEvent.clientY,
-                });
-                markerEl.dispatchEvent(syntheticDown);
-              }
-            }
-          }, 0);
-        }
+        // Immediately start dragging: disable map drag, track mouse manually
+        const map = mapRef.current;
+        map.dragging.disable();
+        isDraggingRef.current = true;
+
+        const onMouseMove = (moveEvt: MouseEvent) => {
+          const containerPoint = map.mouseEventToContainerPoint(moveEvt);
+          const newLatLng = map.containerPointToLatLng(containerPoint);
+          newWp.setLatLng(newLatLng);
+          syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+        };
+
+        const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          map.dragging.enable();
+          isDraggingRef.current = false;
+          skipFitBoundsRef.current = true;
+          syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
       });
     }
 
