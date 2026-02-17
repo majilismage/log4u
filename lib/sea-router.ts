@@ -1,146 +1,198 @@
 /**
- * Client-side sea routing using a pre-computed water/land grid + A* pathfinding.
+ * Client-side sea routing using pre-computed water/land grids + A* pathfinding.
  * 
- * Grid format (water-grid.bin):
- *   Header: "WGRD" (4 bytes) + cols (uint16 BE) + rows (uint16 BE) + resolution (float32 BE)
- *   Data: 1 bit per cell, row-major, MSB first. 0=water, 1=land.
- *   Grid origin: top-left = (90°N, 180°W), row 0 = northernmost
+ * Supports two grid layers:
+ * 1. Global grid (0.1°, water-grid.bin) — fallback for areas outside regions
+ * 2. Regional grids (0.01°, water-grid-regional.bin) — high-res for Americas + Europe
  */
 
-// Singleton grid data
-let gridData: Uint8Array | null = null;
-let gridCols = 0;
-let gridRows = 0;
-let gridRes = 0;
+// --- Grid types ---
+interface GridRegion {
+  name: string;
+  minLat: number; maxLat: number;
+  minLng: number; maxLng: number;
+  cols: number; rows: number;
+  offset: number; bytes: number;
+}
+
+interface RegionalGrid {
+  resolution: number;
+  regions: GridRegion[];
+  data: Uint8Array;
+}
+
+// --- Singleton state ---
+let globalData: Uint8Array | null = null;
+let globalCols = 0, globalRows = 0, globalRes = 0;
+let regional: RegionalGrid | null = null;
 let loadPromise: Promise<void> | null = null;
 
-/** Load the water grid binary file */
-export async function loadWaterGrid(url = '/migration/water-grid.bin'): Promise<void> {
-  if (gridData) return;
+/** Load both grid files */
+export async function loadWaterGrid(): Promise<void> {
+  if (globalData && regional) return;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    const response = await fetch(url);
-    const arrayBuffer = await response.arrayBuffer();
-    const view = new DataView(arrayBuffer);
+    const [globalResp, regionalResp] = await Promise.all([
+      fetch('/migration/water-grid.bin'),
+      fetch('/migration/water-grid-regional.bin'),
+    ]);
 
-    // Parse header
-    const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
-    if (magic !== 'WGRD') throw new Error('Invalid water grid file');
+    // Parse global grid
+    const globalBuf = await globalResp.arrayBuffer();
+    const gView = new DataView(globalBuf);
+    const magic = String.fromCharCode(gView.getUint8(0), gView.getUint8(1), gView.getUint8(2), gView.getUint8(3));
+    if (magic !== 'WGRD') throw new Error('Invalid global water grid');
+    globalCols = gView.getUint16(4);
+    globalRows = gView.getUint16(6);
+    globalRes = gView.getFloat32(8);
+    globalData = new Uint8Array(globalBuf, 12);
 
-    gridCols = view.getUint16(4);
-    gridRows = view.getUint16(6);
-    gridRes = view.getFloat32(8);
+    // Parse regional grid (JSON header null-terminated + binary data)
+    const regionalBuf = await regionalResp.arrayBuffer();
+    const bytes = new Uint8Array(regionalBuf);
+    let nullIdx = 0;
+    while (nullIdx < bytes.length && bytes[nullIdx] !== 0) nullIdx++;
+    const headerStr = new TextDecoder().decode(bytes.slice(0, nullIdx));
+    const header = JSON.parse(headerStr);
+    regional = {
+      resolution: header.resolution,
+      regions: header.regions,
+      data: new Uint8Array(regionalBuf, nullIdx + 1),
+    };
 
-    gridData = new Uint8Array(arrayBuffer, 12);
+    console.log(`[sea-router] Global grid: ${globalCols}x${globalRows} @ ${globalRes}°`);
+    console.log(`[sea-router] Regional grids: ${regional.regions.map((r: GridRegion) => r.name).join(', ')} @ ${regional.resolution}°`);
   })();
 
   return loadPromise;
 }
 
-/** Check if a grid cell is water (0) or land (1) */
-function isLand(row: number, col: number): boolean {
-  if (!gridData || row < 0 || row >= gridRows || col < 0 || col >= gridCols) return true; // out of bounds = land
-  const bitIndex = row * gridCols + col;
+/** Find which regional grid contains a point, or null */
+function findRegion(lat: number, lng: number): GridRegion | null {
+  if (!regional) return null;
+  for (const r of regional.regions) {
+    if (lat >= r.minLat && lat <= r.maxLat && lng >= r.minLng && lng <= r.maxLng) return r;
+  }
+  return null;
+}
+
+/** Check if a point is land using the best available grid */
+function isLandAt(lat: number, lng: number): boolean {
+  // Try regional first
+  const region = findRegion(lat, lng);
+  if (region && regional) {
+    const row = Math.floor((region.maxLat - lat) / regional.resolution);
+    const col = Math.floor((lng - region.minLng) / regional.resolution);
+    if (row >= 0 && row < region.rows && col >= 0 && col < region.cols) {
+      const bitIndex = row * region.cols + col;
+      const byteIndex = region.offset + Math.floor(bitIndex / 8);
+      const bitOffset = 7 - (bitIndex % 8);
+      return (regional.data[byteIndex] & (1 << bitOffset)) !== 0;
+    }
+  }
+  // Fall back to global
+  return isLandGlobal(lat, lng);
+}
+
+function isLandGlobal(lat: number, lng: number): boolean {
+  if (!globalData) return false;
+  const row = Math.floor((90 - lat) / globalRes);
+  const col = Math.floor((lng + 180) / globalRes);
+  if (row < 0 || row >= globalRows || col < 0 || col >= globalCols) return true;
+  const bitIndex = row * globalCols + col;
   const byteIndex = Math.floor(bitIndex / 8);
   const bitOffset = 7 - (bitIndex % 8);
-  return (gridData[byteIndex] & (1 << bitOffset)) !== 0;
-}
-
-/** Convert lat/lng to grid row/col */
-function toGrid(lat: number, lng: number): [number, number] {
-  const row = Math.floor((90 - lat) / gridRes);
-  const col = Math.floor((lng + 180) / gridRes);
-  return [
-    Math.max(0, Math.min(gridRows - 1, row)),
-    Math.max(0, Math.min(gridCols - 1, col)),
-  ];
-}
-
-/** Convert grid row/col to lat/lng (cell center) */
-function toLatLng(row: number, col: number): [number, number] {
-  return [
-    90 - (row + 0.5) * gridRes,
-    -180 + (col + 0.5) * gridRes,
-  ];
+  return (globalData[byteIndex] & (1 << bitOffset)) !== 0;
 }
 
 /** Check if a lat/lng point is on water */
 export function isWater(lat: number, lng: number): boolean {
-  if (!gridData) return true; // assume water if grid not loaded
-  const [row, col] = toGrid(lat, lng);
-  return !isLand(row, col);
+  return !isLandAt(lat, lng);
 }
 
-/** Snap a lat/lng to nearest water cell (spiral search) */
+/** Snap a lat/lng to nearest water (spiral search using best grid) */
 export function snapToWater(lat: number, lng: number, maxRadius = 50): [number, number] {
-  if (!gridData) return [lat, lng];
-  const [startRow, startCol] = toGrid(lat, lng);
+  if (!isLandAt(lat, lng)) return [lat, lng];
 
-  if (!isLand(startRow, startCol)) return [lat, lng]; // already on water
+  const region = findRegion(lat, lng);
+  const res = region && regional ? regional.resolution : globalRes;
 
-  // Spiral outward
   for (let r = 1; r <= maxRadius; r++) {
     for (let dr = -r; dr <= r; dr++) {
       for (let dc = -r; dc <= r; dc++) {
-        if (Math.abs(dr) !== r && Math.abs(dc) !== r) continue; // only check perimeter
-        const nr = startRow + dr;
-        const nc = startCol + dc;
-        if (nr >= 0 && nr < gridRows && nc >= 0 && nc < gridCols && !isLand(nr, nc)) {
-          return toLatLng(nr, nc);
-        }
+        if (Math.abs(dr) !== r && Math.abs(dc) !== r) continue;
+        const testLat = lat + dr * res;
+        const testLng = lng + dc * res;
+        if (!isLandAt(testLat, testLng)) return [testLat, testLng];
       }
     }
   }
-
-  return [lat, lng]; // fallback
+  return [lat, lng];
 }
 
 /**
  * A* pathfinding on the water grid.
- * Returns array of [lat, lng] waypoints, or null if no path found.
+ * Uses the best available resolution for the route area.
  */
 export function findSeaRoute(
   fromLat: number, fromLng: number,
   toLat: number, toLng: number,
-  maxIterations = 200000
+  maxIterations = 500000
 ): [number, number][] | null {
-  if (!gridData) return null;
+  if (!globalData) return null;
 
-  const [startRow, startCol] = toGrid(fromLat, fromLng);
-  const [endRow, endCol] = toGrid(toLat, toLng);
+  // Snap endpoints to water
+  const [sLat, sLng] = snapToWater(fromLat, fromLng);
+  const [eLat, eLng] = snapToWater(toLat, toLng);
 
-  // If start or end is on land, snap them
-  let sr = startRow, sc = startCol, er = endRow, ec = endCol;
-  if (isLand(sr, sc)) {
-    const snapped = snapToWater(fromLat, fromLng);
-    [sr, sc] = toGrid(snapped[0], snapped[1]);
-  }
-  if (isLand(er, ec)) {
-    const snapped = snapToWater(toLat, toLng);
-    [er, ec] = toGrid(snapped[0], snapped[1]);
-  }
+  if (isLandAt(sLat, sLng) || isLandAt(eLat, eLng)) return null;
 
-  if (isLand(sr, sc) || isLand(er, ec)) return null;
+  // Determine grid resolution: use regional if both endpoints are in the same region
+  const startRegion = findRegion(sLat, sLng);
+  const endRegion = findRegion(eLat, eLng);
+  const useRegional = startRegion && endRegion && startRegion.name === endRegion.name && regional;
+  const res = useRegional ? regional!.resolution : globalRes;
 
-  // A* with 8-directional movement
-  const key = (r: number, c: number) => r * gridCols + c;
-  const heuristic = (r: number, c: number) => {
-    const dr = Math.abs(r - er);
-    const dc = Math.abs(c - ec);
-    return Math.max(dr, dc) + (Math.SQRT2 - 1) * Math.min(dr, dc); // octile distance
+  // Convert to grid coordinates
+  const toRow = (lat: number) => useRegional
+    ? Math.floor((startRegion!.maxLat - lat) / res)
+    : Math.floor((90 - lat) / res);
+  const toCol = (lng: number) => useRegional
+    ? Math.floor((lng - startRegion!.minLng) / res)
+    : Math.floor((lng + 180) / res);
+  const maxRow = useRegional ? startRegion!.rows : globalRows;
+  const maxCol = useRegional ? startRegion!.cols : globalCols;
+  const toLatLng = (row: number, col: number): [number, number] => useRegional
+    ? [startRegion!.maxLat - (row + 0.5) * res, startRegion!.minLng + (col + 0.5) * res]
+    : [90 - (row + 0.5) * res, -180 + (col + 0.5) * res];
+
+  const isLandCell = (row: number, col: number): boolean => {
+    if (row < 0 || row >= maxRow || col < 0 || col >= maxCol) return true;
+    const [lat, lng] = toLatLng(row, col);
+    return isLandAt(lat, lng);
   };
 
-  // Priority queue (simple binary heap)
+  const sr = toRow(sLat), sc = toCol(sLng);
+  const er = toRow(eLat), ec = toCol(eLng);
+
+  if (isLandCell(sr, sc) || isLandCell(er, ec)) return null;
+
+  // A* with 8-directional movement + binary heap
+  const key = (r: number, c: number) => r * maxCol + c;
+  const heuristic = (r: number, c: number) => {
+    const dr = Math.abs(r - er), dc = Math.abs(c - ec);
+    return Math.max(dr, dc) + (Math.SQRT2 - 1) * Math.min(dr, dc);
+  };
+
   const gScore = new Map<number, number>();
   const cameFrom = new Map<number, number>();
   const startKey = key(sr, sc);
   const endKey = key(er, ec);
-
   gScore.set(startKey, 0);
 
-  // Binary min-heap for priority queue
-  const heap: [number, number][] = []; // [fScore, key]
+  // Binary min-heap
+  const heap: [number, number][] = [];
   const heapPush = (item: [number, number]) => {
     heap.push(item);
     let i = heap.length - 1;
@@ -158,13 +210,13 @@ export function findSeaRoute(
       heap[0] = last;
       let i = 0;
       while (true) {
-        let smallest = i;
+        let sm = i;
         const l = 2 * i + 1, r = 2 * i + 2;
-        if (l < heap.length && heap[l][0] < heap[smallest][0]) smallest = l;
-        if (r < heap.length && heap[r][0] < heap[smallest][0]) smallest = r;
-        if (smallest === i) break;
-        [heap[smallest], heap[i]] = [heap[i], heap[smallest]];
-        i = smallest;
+        if (l < heap.length && heap[l][0] < heap[sm][0]) sm = l;
+        if (r < heap.length && heap[r][0] < heap[sm][0]) sm = r;
+        if (sm === i) break;
+        [heap[sm], heap[i]] = [heap[i], heap[sm]];
+        i = sm;
       }
     }
     return top;
@@ -173,55 +225,41 @@ export function findSeaRoute(
   heapPush([heuristic(sr, sc), startKey]);
   const closed = new Set<number>();
 
-  const dirs = [
-    [-1, 0], [1, 0], [0, -1], [0, 1],       // cardinal
-    [-1, -1], [-1, 1], [1, -1], [1, 1],      // diagonal
-  ];
-  const costs = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+  const costs = [1,1,1,1,Math.SQRT2,Math.SQRT2,Math.SQRT2,Math.SQRT2];
 
   let iterations = 0;
-
   while (heap.length > 0 && iterations < maxIterations) {
     iterations++;
-
     const [, currentKey] = heapPop();
 
     if (currentKey === endKey) {
-      // Reconstruct path
       const path: [number, number][] = [];
       let k = endKey;
       while (k !== undefined) {
-        const r = Math.floor(k / gridCols);
-        const c = k % gridCols;
+        const r = Math.floor(k / maxCol), c = k % maxCol;
         path.unshift(toLatLng(r, c));
         k = cameFrom.get(k)!;
-        if (k === startKey) {
-          path.unshift(toLatLng(sr, sc));
-          break;
-        }
+        if (k === startKey) { path.unshift(toLatLng(sr, sc)); break; }
       }
-      return simplifyPath(path);
+      console.log(`[sea-router] A* found path: ${path.length} raw points, ${iterations} iterations, res=${res}°`);
+      return simplifyPath(path, res * 1.5);
     }
 
     if (closed.has(currentKey)) continue;
     closed.add(currentKey);
 
-    const cr = Math.floor(currentKey / gridCols);
-    const cc = currentKey % gridCols;
+    const cr = Math.floor(currentKey / maxCol), cc = currentKey % maxCol;
     const currentG = gScore.get(currentKey)!;
 
     for (let d = 0; d < 8; d++) {
-      const nr = cr + dirs[d][0];
-      const nc = cc + dirs[d][1];
-      if (nr < 0 || nr >= gridRows || nc < 0 || nc >= gridCols) continue;
-      if (isLand(nr, nc)) continue;
-
+      const nr = cr + dirs[d][0], nc = cc + dirs[d][1];
+      if (nr < 0 || nr >= maxRow || nc < 0 || nc >= maxCol) continue;
+      if (isLandCell(nr, nc)) continue;
       const nk = key(nr, nc);
       if (closed.has(nk)) continue;
-
       const tentG = currentG + costs[d];
       const prevG = gScore.get(nk);
-
       if (prevG === undefined || tentG < prevG) {
         gScore.set(nk, tentG);
         cameFrom.set(nk, currentKey);
@@ -230,47 +268,30 @@ export function findSeaRoute(
     }
   }
 
-  return null; // no path found
+  console.log(`[sea-router] A* exhausted after ${iterations} iterations`);
+  return null;
 }
 
-/**
- * Simplify path using Douglas-Peucker to reduce waypoint count.
- * Keeps route shape but removes redundant collinear points.
- */
-function simplifyPath(path: [number, number][], tolerance = 0.15): [number, number][] {
+/** Douglas-Peucker path simplification */
+function simplifyPath(path: [number, number][], tolerance: number): [number, number][] {
   if (path.length <= 2) return path;
-
-  // Find point with max distance from line between first and last
-  let maxDist = 0;
-  let maxIdx = 0;
-
-  const [startLat, startLng] = path[0];
-  const [endLat, endLng] = path[path.length - 1];
-
+  let maxDist = 0, maxIdx = 0;
+  const [sLat, sLng] = path[0];
+  const [eLat, eLng] = path[path.length - 1];
   for (let i = 1; i < path.length - 1; i++) {
-    const d = pointToLineDist(path[i][0], path[i][1], startLat, startLng, endLat, endLng);
-    if (d > maxDist) {
-      maxDist = d;
-      maxIdx = i;
-    }
+    const d = ptLineDist(path[i][0], path[i][1], sLat, sLng, eLat, eLng);
+    if (d > maxDist) { maxDist = d; maxIdx = i; }
   }
-
   if (maxDist > tolerance) {
     const left = simplifyPath(path.slice(0, maxIdx + 1), tolerance);
     const right = simplifyPath(path.slice(maxIdx), tolerance);
     return [...left.slice(0, -1), ...right];
   }
-
   return [path[0], path[path.length - 1]];
 }
 
-function pointToLineDist(
-  px: number, py: number,
-  ax: number, ay: number,
-  bx: number, by: number
-): number {
-  const dx = bx - ax;
-  const dy = by - ay;
+function ptLineDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
   if (dx === 0 && dy === 0) return Math.sqrt((px - ax) ** 2 + (py - ay) ** 2);
   let t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy);
   t = Math.max(0, Math.min(1, t));

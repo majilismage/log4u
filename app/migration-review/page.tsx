@@ -115,9 +115,7 @@ export default function MigrationReviewPage() {
       }
 
       // Compute sea route via A*
-      console.log(`[sea-router] Routing entry ${idx}: (${snappedFromLat.toFixed(3)},${snappedFromLng.toFixed(3)}) → (${snappedToLat.toFixed(3)},${snappedToLng.toFixed(3)})`);
       const seaRoute = findSeaRoute(snappedFromLat, snappedFromLng, snappedToLat, snappedToLng);
-      console.log(`[sea-router] Result: ${seaRoute ? seaRoute.length + ' waypoints' : 'null (no path)'}`);
       if (seaRoute && seaRoute.length >= 2) {
         setRoutes(prev => {
           const updated = [...prev];
