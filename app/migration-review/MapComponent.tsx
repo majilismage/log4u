@@ -200,9 +200,14 @@ export default function MapComponent({
         zoomControl: true,
       });
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 18,
+      // Esri Ocean basemap — clearly shows water vs land with nautical context
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri — Sources: GEBCO, NOAA, National Geographic',
+        maxZoom: 16,
+      }).addTo(map);
+      // Labels overlay
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 16,
       }).addTo(map);
 
       map.on('click', (e: any) => {
@@ -260,7 +265,7 @@ export default function MapComponent({
     // --- Previous route (grey dashed, full opacity) ---
     if (prevRoute?.route?.coordinates?.length && prevEntry) {
       const coords = prevRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
-      addLayer(L.polyline(coords, { color: '#94a3b8', weight: 2, opacity: 1, dashArray: '5,10' }));
+      addLayer(L.polyline(coords, { color: '#94a3b8', weight: 6, opacity: 1, dashArray: '8,14' }));
       addLayer(L.circleMarker([prevEntry.fromLat, prevEntry.fromLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 1, weight: 1 }));
       addLayer(L.circleMarker([prevEntry.toLat, prevEntry.toLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 1, weight: 1 }));
       coords.forEach((c: number[]) => bounds.extend(c));
@@ -274,7 +279,7 @@ export default function MapComponent({
         : [[currentEntry.fromLat, currentEntry.fromLng], [currentEntry.toLat, currentEntry.toLng]];
 
       // Invisible fat polyline for easier click target
-      const hitArea = addLayer(L.polyline(routeCoords, { color: 'transparent', weight: 20, interactive: true, className: 'route-hit-area' }));
+      const hitArea = addLayer(L.polyline(routeCoords, { color: 'transparent', weight: 40, interactive: true, className: 'route-hit-area' }));
       hitAreaRef.current = hitArea;
       const polyline = addLayer(L.polyline(routeCoords, { color: '#ef4444', weight: 4, interactive: false }));
       currentPolylineRef.current = polyline;
@@ -373,7 +378,7 @@ export default function MapComponent({
       updateDistanceLabel(routeCoords.map((c: number[]) => ({ lat: c[0], lng: c[1] })));
 
       // Click on polyline to add a new waypoint
-      hitArea.on('click', (e: any) => {
+      hitArea.on('mousedown', (e: any) => {
         L.DomEvent.stopPropagation(e);
         const clickLatLng = e.latlng;
 
@@ -426,13 +431,33 @@ export default function MapComponent({
         waypointMarkersRef.current.splice(insertIdx, 0, newWp);
         skipFitBoundsRef.current = true;
         syncRouteFromMarkers(fromMarker.getLatLng(), toMarker.getLatLng(), waypointMarkersRef.current);
+
+        // Immediately start dragging the new waypoint (click-and-drag in one action)
+        if (newWp.dragging) {
+          // Small delay to let Leaflet finish processing the mousedown
+          setTimeout(() => {
+            if (newWp.dragging) {
+              newWp.dragging.enable();
+              // Simulate mousedown on the marker to start drag
+              const markerEl = newWp.getElement();
+              if (markerEl && e.originalEvent) {
+                const syntheticDown = new MouseEvent('mousedown', {
+                  bubbles: true,
+                  clientX: e.originalEvent.clientX,
+                  clientY: e.originalEvent.clientY,
+                });
+                markerEl.dispatchEvent(syntheticDown);
+              }
+            }
+          }, 0);
+        }
       });
     }
 
     // --- Next route (blue dashed, full opacity) ---
     if (nextRoute?.route?.coordinates?.length && nextEntry) {
       const coords = nextRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
-      addLayer(L.polyline(coords, { color: '#60a5fa', weight: 2, opacity: 1, dashArray: '5,10' }));
+      addLayer(L.polyline(coords, { color: '#60a5fa', weight: 6, opacity: 1, dashArray: '8,14' }));
       addLayer(L.circleMarker([nextEntry.fromLat, nextEntry.fromLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 1, weight: 1 }));
       addLayer(L.circleMarker([nextEntry.toLat, nextEntry.toLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 1, weight: 1 }));
       coords.forEach((c: number[]) => bounds.extend(c));
