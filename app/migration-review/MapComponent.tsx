@@ -73,6 +73,7 @@ export default function MapComponent({
   // Keep refs for drag-interactive elements so we can update them without full rerender
   const currentPolylineRef = useRef<any>(null);
   const isDraggingRef = useRef(false);
+  const skipFitBoundsRef = useRef(false);
   // Refs for callbacks to avoid stale closures in Leaflet event handlers
   const editModeRef = useRef(editMode);
   const onMapClickRef = useRef(onMapClick);
@@ -225,6 +226,7 @@ export default function MapComponent({
 
       fromMarker.on('dragend', (e: any) => {
         isDraggingRef.current = false;
+        skipFitBoundsRef.current = true;
         const ll = e.target.getLatLng();
         onCoordsChangeRef.current('from', ll.lat, ll.lng);
       });
@@ -253,6 +255,7 @@ export default function MapComponent({
 
       toMarker.on('dragend', (e: any) => {
         isDraggingRef.current = false;
+        skipFitBoundsRef.current = true;
         const ll = e.target.getLatLng();
         onCoordsChangeRef.current('to', ll.lat, ll.lng);
       });
@@ -267,10 +270,11 @@ export default function MapComponent({
       coords.forEach((c: number[]) => bounds.extend(c));
     }
 
-    // Fit bounds
-    if (bounds.isValid()) {
+    // Fit bounds (skip after drag to preserve user's zoom/pan)
+    if (bounds.isValid() && !skipFitBoundsRef.current) {
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
+    skipFitBoundsRef.current = false;
   }, [mapReady, currentIndex, entries, routes, reviewState, editMode]);
 
   return <div ref={mapContainerRef} data-testid="leaflet-map" className="w-full h-full" />;
