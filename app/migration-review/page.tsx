@@ -329,6 +329,23 @@ export default function MigrationReviewPage() {
   };
 
   const handleCoordsChange = useCallback((type: 'from' | 'to', lat: number, lng: number) => {
+    // Optimistically patch the route's endpoint so the polyline doesn't snap back
+    // while we wait for the async sea-route recalculation
+    setRoutes(prev => {
+      const updated = [...prev];
+      const route = updated[currentIndex];
+      if (route?.route?.coordinates?.length) {
+        const coords = [...route.route.coordinates];
+        if (type === 'from') {
+          coords[0] = [lng, lat]; // GeoJSON is [lng, lat]
+        } else {
+          coords[coords.length - 1] = [lng, lat];
+        }
+        updated[currentIndex] = { ...route, route: { ...route.route, coordinates: coords } };
+      }
+      return updated;
+    });
+
     setEntries(prev => {
       const updated = [...prev];
       const entry = { ...updated[currentIndex] };

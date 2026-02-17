@@ -187,9 +187,9 @@ export default function MapComponent({
     // --- Previous route (grey dashed, 50% opacity) ---
     if (prevRoute?.route?.coordinates?.length && prevEntry) {
       const coords = prevRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
-      addLayer(L.polyline(coords, { color: '#94a3b8', weight: 2, opacity: 0.5, dashArray: '5,10' }));
-      addLayer(L.circleMarker([prevEntry.fromLat, prevEntry.fromLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.5, weight: 1 }));
-      addLayer(L.circleMarker([prevEntry.toLat, prevEntry.toLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 0.5, weight: 1 }));
+      addLayer(L.polyline(coords, { color: '#94a3b8', weight: 2, opacity: 1, dashArray: '5,10' }));
+      addLayer(L.circleMarker([prevEntry.fromLat, prevEntry.fromLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 1, weight: 1 }));
+      addLayer(L.circleMarker([prevEntry.toLat, prevEntry.toLng], { radius: 5, color: '#94a3b8', fillColor: '#94a3b8', fillOpacity: 1, weight: 1 }));
       coords.forEach((c: number[]) => bounds.extend(c));
     }
 
@@ -261,9 +261,9 @@ export default function MapComponent({
     // --- Next route (blue dashed, 50% opacity) ---
     if (nextRoute?.route?.coordinates?.length && nextEntry) {
       const coords = nextRoute.route.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
-      addLayer(L.polyline(coords, { color: '#60a5fa', weight: 2, opacity: 0.5, dashArray: '5,10' }));
-      addLayer(L.circleMarker([nextEntry.fromLat, nextEntry.fromLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 0.5, weight: 1 }));
-      addLayer(L.circleMarker([nextEntry.toLat, nextEntry.toLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 0.5, weight: 1 }));
+      addLayer(L.polyline(coords, { color: '#60a5fa', weight: 2, opacity: 1, dashArray: '5,10' }));
+      addLayer(L.circleMarker([nextEntry.fromLat, nextEntry.fromLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 1, weight: 1 }));
+      addLayer(L.circleMarker([nextEntry.toLat, nextEntry.toLng], { radius: 5, color: '#60a5fa', fillColor: '#60a5fa', fillOpacity: 1, weight: 1 }));
       coords.forEach((c: number[]) => bounds.extend(c));
     }
 
