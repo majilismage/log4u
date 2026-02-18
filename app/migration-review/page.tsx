@@ -294,16 +294,28 @@ export default function MigrationReviewPage() {
   };
 
   const handleApprove = async () => {
-    if (saving || !getCurrentEntry() || isCurrentEntryDuplicate()) return;
+    if (saving || !getCurrentEntry()) return;
 
     setSaving(true);
     try {
       const entry = getCurrentEntry();
+      const route = getCurrentRoute();
       
+      // Build route coordinates as [lat, lng][] for polyline encoding
+      const routeCoordinates = route?.route?.coordinates?.map(
+        (c: number[]) => [c[1], c[0]] // GeoJSON [lng,lat] → [lat,lng]
+      ) || [];
+
+      const isUpdate = isCurrentEntryDuplicate();
+
       const response = await fetch('/api/migration/save-approved', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry)
+        body: JSON.stringify({
+          ...entry,
+          routeCoordinates,
+          isUpdate,
+        })
       });
 
       if (!response.ok) {
@@ -595,10 +607,10 @@ export default function MigrationReviewPage() {
                 <div className="space-y-2 mb-6">
                   <button
                     onClick={handleApprove}
-                    disabled={saving || isDuplicate || reviewState.imported.has(currentIndex)}
-                    className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center justify-center"
+                    disabled={saving || (isDuplicate && !reviewState.imported.has(currentIndex))}
+                    className={`w-full px-4 py-2 ${reviewState.imported.has(currentIndex) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center justify-center`}
                   >
-                    {saving ? 'Saving...' : '✅ Approve (A)'}
+                    {saving ? 'Saving...' : reviewState.imported.has(currentIndex) ? '🔄 Update (A)' : '✅ Approve (A)'}
                   </button>
 
                   <div className="flex gap-2">
