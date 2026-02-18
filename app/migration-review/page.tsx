@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/lib/logger';
 import { loadWaterGrid, snapToWater, findSeaRoute } from '@/lib/sea-router';
+import { decodePolyline } from '@/lib/polyline';
 
 import dynamic from 'next/dynamic';
 
@@ -244,8 +245,18 @@ export default function MigrationReviewPage() {
                 toLat: confirmed.toLat,
                 toLng: confirmed.toLng,
               };
-              // Update route endpoints to match confirmed coords
-              if (updatedRoutes[index]?.route?.coordinates?.length) {
+
+              // Use saved polyline if available, otherwise update route endpoints
+              if (confirmed.routePolyline) {
+                const decoded = decodePolyline(confirmed.routePolyline);
+                updatedRoutes[index] = {
+                  ...updatedRoutes[index],
+                  route: {
+                    type: 'LineString',
+                    coordinates: decoded.map(([lat, lng]) => [lng, lat]), // [lat,lng] → GeoJSON [lng,lat]
+                  },
+                };
+              } else if (updatedRoutes[index]?.route?.coordinates?.length) {
                 const coords = [...updatedRoutes[index].route.coordinates];
                 coords[0] = [confirmed.fromLng, confirmed.fromLat];
                 coords[coords.length - 1] = [confirmed.toLng, confirmed.toLat];

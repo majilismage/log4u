@@ -14,7 +14,7 @@ export async function GET() {
     const sheets = google.sheets({ version: 'v4', auth });
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: googleSheetsId,
-      range: 'A2:T',
+      range: 'A2:U',
     });
 
     const rows = response.data.values;
@@ -41,6 +41,7 @@ export async function GET() {
       avgSpeed: row[12] || '',
       maxSpeed: row[13] || '',
       notes: row[14] || '',
+      routePolyline: row[20] || '',
       // Build a duplicate key for matching
       key: `${row[1]}|${row[3]}|${row[7]}`,
     }));
