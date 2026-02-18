@@ -43,12 +43,21 @@ interface ReviewState {
   flagged: Map<number, string>;
 }
 
+interface ApprovedRoute {
+  index: number;
+  from: string;
+  to: string;
+  coordinates: number[][]; // GeoJSON [lng, lat][]
+}
+
 interface MapComponentProps {
   entries: MigrationEntry[];
   routes: RouteData[];
   currentIndex: number;
   reviewState: ReviewState;
   editMode: 'none' | 'from' | 'to';
+  showAllApproved: boolean;
+  approvedRoutes: ApprovedRoute[];
   onMapClick: (lat: number, lng: number) => void;
   onCoordsChange: (type: 'from' | 'to', lat: number, lng: number) => void;
   onRouteUpdate: (index: number, route: { type: string; coordinates: number[][] }) => void;
@@ -61,6 +70,8 @@ export default function MapComponent({
   currentIndex,
   reviewState,
   editMode,
+  showAllApproved,
+  approvedRoutes,
   onMapClick,
   onCoordsChange,
   onRouteUpdate,
@@ -239,6 +250,29 @@ export default function MapComponent({
     clearLayers();
 
     const map = mapRef.current;
+
+    // Show All Approved mode — render all approved polylines and fit bounds
+    if (showAllApproved && approvedRoutes.length > 0) {
+      const bounds = L.latLngBounds([]);
+      const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+
+      approvedRoutes.forEach((ar, i) => {
+        if (ar.coordinates.length < 2) return;
+        const coords = ar.coordinates.map(([lng, lat]: number[]) => [lat, lng]);
+        const color = colors[i % colors.length];
+        addLayer(L.polyline(coords, { color, weight: 3, opacity: 0.8 }));
+        // Start/end markers
+        addLayer(L.circleMarker(coords[0] as [number, number], { radius: 4, color, fillColor: color, fillOpacity: 1, weight: 1 }));
+        addLayer(L.circleMarker(coords[coords.length - 1] as [number, number], { radius: 4, color, fillColor: color, fillOpacity: 1, weight: 1 }));
+        coords.forEach((c: number[]) => bounds.extend(c as [number, number]));
+      });
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [30, 30] });
+      }
+      return;
+    }
+
     const currentEntry = entries[currentIndex];
     const prevEntry = currentIndex > 0 ? entries[currentIndex - 1] : null;
     const nextEntry = currentIndex < entries.length - 1 ? entries[currentIndex + 1] : null;
@@ -468,7 +502,7 @@ export default function MapComponent({
       map.fitBounds(currentBounds, { padding: [60, 60], maxZoom: 14 });
     }
     skipFitBoundsRef.current = false;
-  }, [mapReady, currentIndex, entries, routes, reviewState, editMode]);
+  }, [mapReady, currentIndex, entries, routes, reviewState, editMode, showAllApproved, approvedRoutes]);
 
   return <div ref={mapContainerRef} data-testid="leaflet-map" className="w-full h-full" />;
 }

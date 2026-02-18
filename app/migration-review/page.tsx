@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { logger } from '@/lib/logger';
 import { loadWaterGrid, snapToWater, findSeaRoute } from '@/lib/sea-router';
 import { decodePolyline } from '@/lib/polyline';
@@ -67,10 +67,28 @@ export default function MigrationReviewPage() {
   const [flagText, setFlagText] = useState('');
   const [showFlagInput, setShowFlagInput] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showAllApproved, setShowAllApproved] = useState(false);
   const mapRef = useRef<any>(null);
 
   const [waterGridReady, setWaterGridReady] = useState(false);
   const routedIndicesRef = useRef<Set<number>>(new Set());
+
+  // Compute approved routes for "Show All Approved" view
+  const approvedRoutes = useMemo(() => {
+    return Array.from(reviewState.imported)
+      .map(idx => {
+        const route = routes[idx];
+        const entry = entries[idx];
+        if (!route?.route?.coordinates?.length || !entry) return null;
+        return {
+          index: idx,
+          from: entry.from,
+          to: entry.to,
+          coordinates: route.route.coordinates,
+        };
+      })
+      .filter(Boolean) as { index: number; from: string; to: string; coordinates: number[][] }[];
+  }, [reviewState.imported, routes, entries]);
 
   // Load water grid + data on mount
   useEffect(() => {
@@ -523,6 +541,8 @@ export default function MigrationReviewPage() {
             currentIndex={currentIndex}
             reviewState={reviewState}
             editMode={editMode}
+            showAllApproved={showAllApproved}
+            approvedRoutes={approvedRoutes}
             onMapClick={handleMapClick}
             onCoordsChange={handleCoordsChange}
             onRouteUpdate={handleRouteUpdate}
@@ -615,10 +635,10 @@ export default function MigrationReviewPage() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="space-y-2 mb-6">
+                <div className={`space-y-2 mb-6 ${showAllApproved ? 'opacity-50 pointer-events-none' : ''}`}>
                   <button
                     onClick={handleApprove}
-                    disabled={saving || (isDuplicate && !reviewState.imported.has(currentIndex))}
+                    disabled={saving || showAllApproved || (isDuplicate && !reviewState.imported.has(currentIndex))}
                     className={`w-full px-4 py-2 ${reviewState.imported.has(currentIndex) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center justify-center`}
                   >
                     {saving ? 'Saving...' : reviewState.imported.has(currentIndex) ? '🔄 Update (A)' : '✅ Approve (A)'}
@@ -679,6 +699,17 @@ export default function MigrationReviewPage() {
                       ▶️ Next (→)
                     </button>
                   </div>
+
+                  <button
+                    onClick={() => setShowAllApproved(!showAllApproved)}
+                    className={`w-full px-4 py-2 rounded ${
+                      showAllApproved
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'bg-gray-600 hover:bg-gray-700'
+                    }`}
+                  >
+                    {showAllApproved ? '🗺️ Hide All Approved' : '🗺️ Show All Approved'}
+                  </button>
                 </div>
 
                 </div>
