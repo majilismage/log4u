@@ -700,17 +700,17 @@ export default function MigrationReviewPage() {
                     </button>
                   </div>
 
-                  <button
-                    onClick={() => setShowAllApproved(!showAllApproved)}
-                    className={`w-full px-4 py-2 rounded ${
-                      showAllApproved
-                        ? 'bg-purple-600 hover:bg-purple-700'
-                        : 'bg-gray-600 hover:bg-gray-700'
-                    }`}
-                  >
-                    {showAllApproved ? '🗺️ Hide All Approved' : '🗺️ Show All Approved'}
-                  </button>
                 </div>
+                <button
+                  onClick={() => setShowAllApproved(!showAllApproved)}
+                  className={`w-full px-4 py-2 rounded ${
+                    showAllApproved
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-gray-600 hover:bg-gray-700'
+                  }`}
+                >
+                  {showAllApproved ? '🗺️ Hide All Approved' : '🗺️ Show All Approved'}
+                </button>
 
                 </div>
                 {/* Next entry summary */}
